@@ -5,13 +5,16 @@ from newspaper import Article
 from newspaper import Config
 import nltk
 
-# Downloading the punkt tokenizer for content parsing
+# Global constants
+API_KEY = '0debed01aa29475f9ff512e806bea611'
+ENDPOINT = 'https://newsapi.org/v2/everything'
+
+# Download the punkt tokenizer for content parsing
 nltk.download('punkt')
 
-# Set user_agent to avoid blocking by some sites
-user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+# Configuration for newspaper3k to avoid being blocked
 config = Config()
-config.browser_user_agent = user_agent
+config.browser_user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
 
 def fetch_full_text(url):
     try:
@@ -57,6 +60,14 @@ def main():
                 st.write(f"Sentiment: {sentiment}")
                 st.write(f"Content: {article['content'][:500]}...")  # Display first 500 characters
                 st.markdown("---")
+
+def sentiment_label(polarity):
+    if polarity > 0:
+        return "Positive"
+    elif polarity < 0:
+        return "Negative"
+    else:
+        return "Neutral"
 
 if __name__ == '__main__':
     main()
