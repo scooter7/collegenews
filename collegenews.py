@@ -34,17 +34,26 @@ def fetch_news(keyword):
     
     articles = []
     for item in news_items:
-        full_content = fetch_full_text(item.get('url'))
+        url = item.get('url')
+        full_content = fetch_full_text(url)
         if full_content:
             sentiment = TextBlob(full_content).sentiment
+            articles.append({
+                "title": item.get('title'),
+                "url": url,
+                "content": full_content,
+                "sentiment": sentiment
+            })
         else:
-            sentiment = TextBlob(item.get('description') or "").sentiment
-        articles.append({
-            "title": item.get('title'),
-            "url": item.get('url'),
-            "content": full_content if full_content else item.get('description'),
-            "sentiment": sentiment
-        })
+            # Handling case where full_content is None
+            description = item.get('description') or "No description available"
+            sentiment = TextBlob(description).sentiment
+            articles.append({
+                "title": item.get('title'),
+                "url": url,
+                "content": description,
+                "sentiment": sentiment
+            })
     return articles
 
 def main():
@@ -57,8 +66,11 @@ def main():
                 sentiment = sentiment_label(article['sentiment'].polarity)
                 st.subheader(article['title'])
                 st.write(f"URL: [{article['title']}]({article['url']})")
-                st.write(f"Sentiment: {sentiment}")
-                st.write(f"Content: {article['content'][:500]}...")  # Display first 500 characters
+                if article['content']:
+                    st.write(f"Sentiment: {sentiment}")
+                    st.write(f"Content: {article['content'][:500]}...")  # Display first 500 characters
+                else:
+                    st.write("Content not available.")
                 st.markdown("---")
 
 def sentiment_label(polarity):
