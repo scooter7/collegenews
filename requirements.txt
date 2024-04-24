@@ -1,7 +1,6 @@
-streamlit 
-matplotlib 
-seaborn 
-nltk 
-wordcloud 
-google-api-python-client
+streamlit
 requests
+nltk
+matplotlib
+wordcloud
+Pillow  # Dependency for wordcloud
