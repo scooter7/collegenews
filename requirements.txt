@@ -4,3 +4,4 @@ nltk
 matplotlib
 wordcloud
 Pillow  # Dependency for wordcloud
+streamlit-echarts
