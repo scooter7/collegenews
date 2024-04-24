@@ -3,6 +3,7 @@ import requests
 import nltk
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
+from streamlit_echarts import st_echarts  # Import for echarts
 
 # Function to fetch custom stopwords
 def get_custom_stopwords(url):
@@ -22,12 +23,49 @@ def plot_wordcloud(words):
     ax.axis("off")
     st.pyplot(fig)
 
+def render_sentiment_gauge(score):
+    option = {
+        "series": [
+            {
+                "type": 'gauge',
+                "startAngle": 90,
+                "endAngle": -270,
+                "pointer": {"show": False},
+                "progress": {
+                    "show": True,
+                    "overlap": False,
+                    "roundCap": True,
+                    "clip": False,
+                    "itemStyle": {
+                        "borderWidth": 1,
+                        "borderColor": '#464646'
+                    }
+                },
+                "axisLine": {
+                    "lineStyle": {
+                        "width": 10,
+                        "color": [
+                            [0.3, '#FF6F61'], [0.7, '#FFD93D'], [1, '#6DD400']
+                        ]
+                    }
+                },
+                "data": [{'value': score}],
+                "axisLabel": {"show": False},
+                "axisTick": {"show": False},
+                "splitLine": {"show": False},
+                "detail": {"formatter": '{value}%', "color": "auto"},
+            }
+        ]
+    }
+    st_echarts(options=option, height="400px")
+
 def analyze_sentiment(text):
     nltk.download("vader_lexicon", quiet=True)
     from nltk.sentiment.vader import SentimentIntensityAnalyzer
     sid = SentimentIntensityAnalyzer()
     sentiment = sid.polarity_scores(text)
-    return "Positive" if sentiment["compound"] > 0 else "Negative" if sentiment["compound"] < 0 else "Neutral"
+    sentiment_score = sentiment['compound'] * 100  # Scale to percentage for gauge
+    return sentiment_score
 
 def fetch_news(query):
     ENDPOINT = 'https://newsapi.org/v2/everything'
@@ -57,8 +95,9 @@ def main():
             if news_text:
                 st.write("Aggregate Word Cloud:")
                 plot_wordcloud(news_text)
-                sentiment = analyze_sentiment(news_text)
-                st.write("Aggregate Sentiment:", sentiment)
+                sentiment_score = analyze_sentiment(news_text)
+                st.write("Aggregate Sentiment:")
+                render_sentiment_gauge(sentiment_score)
         else:
             st.write("No results found.")
 
