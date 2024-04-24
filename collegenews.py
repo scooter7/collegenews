@@ -7,9 +7,8 @@ from googleapiclient.discovery import build
 
 # Ensure NLTK resources are downloaded
 nltk.download('vader_lexicon', quiet=True)
-nltk.download('stopwords', quiet=True)  # If used elsewhere, ensure this is downloaded too
+nltk.download('stopwords', quiet=True)
 
-# Function to download and return custom stopwords
 def get_custom_stopwords(url):
     response = requests.get(url)
     stopwords = set(response.text.split())
@@ -42,7 +41,7 @@ def google_search(query):
     api_key = st.secrets["google_search"]["api_key"]
     cse_id = st.secrets["google_search"]["cse_id"]
     service = build("customsearch", "v1", developerKey=api_key)
-    res = service.cse().list(q=query, cx=cse_id, num=3).execute()
+    res = service.cse().list(q=query, cx=cse_id, num=10).execute()
     return res
 
 def main():
@@ -54,11 +53,15 @@ def main():
         if "items" in results:
             for result in results["items"]:
                 news_text += result.get("snippet", "") + " "
-        if news_text:
-            st.write("Word Cloud:")
-            plot_wordcloud(news_text)
-            sentiment = analyze_sentiment(news_text)
-            st.write("Sentiment:", sentiment)
+                st.markdown(f"#### [{result['title']}]({result['link']})")
+                st.markdown(f"*{result.get('snippet', 'No description available')}*")
+                st.markdown("---")
+            
+            if news_text:
+                st.write("Aggregate Word Cloud:")
+                plot_wordcloud(news_text)
+                sentiment = analyze_sentiment(news_text)
+                st.write("Aggregate Sentiment:", sentiment)
         else:
             st.write("No results found.")
 
