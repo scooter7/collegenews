@@ -24,36 +24,51 @@ def plot_wordcloud(words):
     st.pyplot(fig)
 
 def render_sentiment_gauge(score):
+    # Determine the color based on the sentiment score
+    color = '#6DD400' if score > 0 else '#FFD93D' if score == 0 else '#FF4500'
+    
     option = {
         "series": [
             {
                 "type": 'gauge',
-                "startAngle": 90,
-                "endAngle": -270,
-                "pointer": {"show": False},
-                "progress": {
-                    "show": True,
-                    "overlap": False,
-                    "roundCap": True,
-                    "clip": False,
-                    "itemStyle": {
-                        "borderWidth": 1,
-                        "borderColor": '#464646'
-                    }
+                "startAngle": 180,  # Start angle for semi-circle
+                "endAngle": 0,      # End angle for semi-circle
+                "min": -100,        # Minimum value of the gauge
+                "max": 100,         # Maximum value of the gauge
+                "splitNumber": 4,   # Divide scale into 3 parts (negative, neutral, positive)
+                "pointer": {
+                    "show": True,   # Show pointer
+                    "length": '90%',
+                    "width": 8
                 },
                 "axisLine": {
                     "lineStyle": {
-                        "width": 10,
+                        "width": 15,
                         "color": [
-                            [0.3, '#FF6F61'], [0.7, '#FFD93D'], [1, '#6DD400']
+                            [0.33, '#FF4500'],   # Red from -100 to -33
+                            [0.5, '#FFD93D'],    # Yellow from -33 to 0
+                            [0.67, '#FFD93D'],   # Yellow from 0 to 33
+                            [1, '#6DD400']       # Green from 33 to 100
                         ]
                     }
                 },
-                "data": [{'value': score}],
-                "axisLabel": {"show": False},
-                "axisTick": {"show": False},
-                "splitLine": {"show": False},
-                "detail": {"formatter": '{value}%', "color": "auto"},
+                "axisLabel": {
+                    "show": False
+                },
+                "axisTick": {
+                    "show": False
+                },
+                "splitLine": {
+                    "show": False
+                },
+                "detail": {
+                    "formatter": '{value}%',
+                    "offsetCenter": [0, '80%'],  # Position of the detail (score)
+                    "fontSize": 16,
+                    "color": color,
+                    "fontWeight": 'bold'
+                },
+                "data": [{'value': score, "name": "Sentiment Score"}],
             }
         ]
     }
