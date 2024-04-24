@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import nltk
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 from googleapiclient.discovery import build
@@ -21,11 +20,12 @@ def plot_wordcloud(words):
                           stopwords=custom_stopwords, 
                           min_font_size=10).generate(words)
     
-    plt.figure(figsize=(8, 8), facecolor=None)
-    plt.imshow(wordcloud)
-    plt.axis("off")
-    plt.tight_layout(pad=0)
-    st.pyplot()
+    # Create a matplotlib figure
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.imshow(wordcloud)
+    ax.axis("off")
+    ax.set_title("Word Cloud")
+    st.pyplot(fig)  # Pass the figure to streamlit.pyplot
 
 def analyze_sentiment(text):
     nltk.download("vader_lexicon", quiet=True)
