@@ -3,3 +3,4 @@ requests
 newspaper3k
 nltk
 rake-nltk
+lxml_html_clean
