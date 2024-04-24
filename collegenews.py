@@ -1,20 +1,23 @@
 import streamlit as st
 import requests
-from textblob import TextBlob
-from newspaper import Article
-from newspaper import Config
+from newspaper import Article, Config
+from nltk.sentiment import SentimentIntensityAnalyzer
+from rake_nltk import Rake
 import nltk
 
-# Global constants
+# Download necessary NLTK resources
+nltk.download('punkt')
+nltk.download('vader_lexicon')
+
+# Initialize SentimentIntensityAnalyzer and Rake
+sia = SentimentIntensityAnalyzer()
+rake = Rake()
+
 API_KEY = '0debed01aa29475f9ff512e806bea611'
 ENDPOINT = 'https://newsapi.org/v2/everything'
 
-# Download the punkt tokenizer for content parsing
-nltk.download('punkt')
-
-# Configuration for newspaper3k to avoid being blocked
 config = Config()
-config.browser_user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+config.browser_user_agent = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
 
 def fetch_full_text(url):
     try:
@@ -37,49 +40,47 @@ def fetch_news(keyword):
         url = item.get('url')
         full_content = fetch_full_text(url)
         if full_content:
-            sentiment = TextBlob(full_content).sentiment
+            sentiment = sia.polarity_scores(full_content)
+            rake.extract_keywords_from_text(full_content)
+            keywords = rake.get_ranked_phrases()[:5]  # Extract top 5 keywords
             articles.append({
                 "title": item.get('title'),
                 "url": url,
                 "content": full_content,
-                "sentiment": sentiment
+                "sentiment": sentiment,
+                "keywords": keywords
             })
         else:
-            # Handling case where full_content is None
             description = item.get('description') or "No description available"
-            sentiment = TextBlob(description).sentiment
+            sentiment = sia.polarity_scores(description)
+            rake.extract_keywords_from_text(description)
+            keywords = rake.get_ranked_phrases()[:5]
             articles.append({
                 "title": item.get('title'),
                 "url": url,
                 "content": description,
-                "sentiment": sentiment
+                "sentiment": sentiment,
+                "keywords": keywords
             })
     return articles
 
 def main():
-    st.title("News Sentiment Analyzer")
+    st.title("News Sentiment and Keyword Analyzer")
     keyword = st.text_input("Enter a keyword to search news:", "")
     if st.button("Fetch News"):
         with st.spinner('Fetching news articles...'):
             articles = fetch_news(keyword)
             for article in articles:
-                sentiment = sentiment_label(article['sentiment'].polarity)
                 st.subheader(article['title'])
                 st.write(f"URL: [{article['title']}]({article['url']})")
-                if article['content']:
-                    st.write(f"Sentiment: {sentiment}")
-                    st.write(f"Content: {article['content'][:500]}...")  # Display first 500 characters
-                else:
-                    st.write("Content not available.")
+                st.write("Sentiment Analysis:")
+                st.write(f"Positive: {article['sentiment']['pos']:.2f}")
+                st.write(f"Neutral: {article['sentiment']['neu']:.2f}")
+                st.write(f"Negative: {article['sentiment']['neg']:.2f}")
+                st.write(f"Compound: {article['sentiment']['compound']:.2f}")
+                st.write("Top Keywords: ", ', '.join(article['keywords']))
+                st.write(f"Content: {article['content'][:500]}...")  # Display first 500 characters
                 st.markdown("---")
-
-def sentiment_label(polarity):
-    if polarity > 0:
-        return "Positive"
-    elif polarity < 0:
-        return "Negative"
-    else:
-        return "Neutral"
 
 if __name__ == '__main__':
     main()
