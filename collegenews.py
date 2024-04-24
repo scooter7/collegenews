@@ -3,12 +3,8 @@ import requests
 import nltk
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
-from googleapiclient.discovery import build
 
-# Ensure NLTK resources are downloaded
-nltk.download('vader_lexicon', quiet=True)
-nltk.download('stopwords', quiet=True)
-
+# Function to fetch custom stopwords
 def get_custom_stopwords(url):
     response = requests.get(url)
     stopwords = set(response.text.split())
@@ -27,36 +23,37 @@ def plot_wordcloud(words):
     st.pyplot(fig)
 
 def analyze_sentiment(text):
+    nltk.download("vader_lexicon", quiet=True)
     from nltk.sentiment.vader import SentimentIntensityAnalyzer
     sid = SentimentIntensityAnalyzer()
     sentiment = sid.polarity_scores(text)
-    if sentiment["compound"] > 0:
-        return "Positive"
-    elif sentiment["compound"] < 0:
-        return "Negative"
-    else:
-        return "Neutral"
+    return "Positive" if sentiment["compound"] > 0 else "Negative" if sentiment["compound"] < 0 else "Neutral"
 
-def google_search(query):
-    api_key = st.secrets["google_search"]["api_key"]
-    cse_id = st.secrets["google_search"]["cse_id"]
-    service = build("customsearch", "v1", developerKey=api_key)
-    res = service.cse().list(q=query, cx=cse_id, num=10).execute()
-    return res
+def fetch_news(query):
+    ENDPOINT = 'https://newsapi.org/v2/everything'
+    params = {
+        'q': query,
+        'apiKey': st.secrets["newsapi"]["api_key"],
+        'pageSize': 10,  # Retrieve the top 10 articles
+    }
+    response = requests.get(ENDPOINT, params=params)
+    return response.json()
 
 def main():
     st.title("News Feed Analyzer")
     query = st.text_input("Enter news keyword to search:")
     if st.button("Search"):
-        results = google_search(query)
+        results = fetch_news(query)
         news_text = ""
-        if "items" in results:
-            for result in results["items"]:
-                news_text += result.get("snippet", "") + " "
-                st.markdown(f"#### [{result['title']}]({result['link']})")
-                st.markdown(f"*{result.get('snippet', 'No description available')}*")
+        if results.get("articles"):
+            for article in results["articles"]:
+                title = article['title']
+                description = article['description'] or "No description available"
+                url = article['url']
+                news_text += description + " "
+                st.markdown(f"#### [{title}]({url})")
+                st.markdown(f"*{description}*")
                 st.markdown("---")
-            
             if news_text:
                 st.write("Aggregate Word Cloud:")
                 plot_wordcloud(news_text)
