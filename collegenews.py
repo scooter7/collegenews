@@ -5,19 +5,19 @@ from nltk.sentiment import SentimentIntensityAnalyzer
 from rake_nltk import Rake
 import nltk
 
-# Download necessary NLTK resources
-nltk.download('punkt')
-nltk.download('vader_lexicon')
-
-# Initialize SentimentIntensityAnalyzer and Rake
+# Initialize SentimentIntensityAnalyzer
 sia = SentimentIntensityAnalyzer()
-rake = Rake()
 
-API_KEY = '0debed01aa29475f9ff512e806bea611'
+API_KEY = 'your_api_key'
 ENDPOINT = 'https://newsapi.org/v2/everything'
 
 config = Config()
 config.browser_user_agent = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+
+def fetch_stopwords(url):
+    response = requests.get(url)
+    stopwords = response.text.split()
+    return stopwords
 
 def fetch_full_text(url):
     try:
@@ -30,6 +30,11 @@ def fetch_full_text(url):
         return None
 
 def fetch_news(keyword):
+    # Custom stopwords URL
+    stopwords_url = "https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt"
+    custom_stopwords = fetch_stopwords(stopwords_url)
+    rake = Rake(stopwords=custom_stopwords)  # Initialize Rake with custom stopwords
+    
     headers = {'Authorization': f'Bearer {API_KEY}'}
     params = {'q': keyword, 'pageSize': 10, 'language': 'en'}
     response = requests.get(ENDPOINT, headers=headers, params=params)
