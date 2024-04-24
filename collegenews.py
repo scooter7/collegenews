@@ -1,34 +1,33 @@
 import streamlit as st
 import requests
+import nltk
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 from googleapiclient.discovery import build
 
+# Ensure NLTK resources are downloaded
+nltk.download('vader_lexicon', quiet=True)
+nltk.download('stopwords', quiet=True)  # If used elsewhere, ensure this is downloaded too
+
 # Function to download and return custom stopwords
 def get_custom_stopwords(url):
     response = requests.get(url)
-    # Split by line break to get a list of stopwords
     stopwords = set(response.text.split())
     return stopwords
 
 def plot_wordcloud(words):
-    # Use custom stopwords from the provided URL
     custom_stopwords_url = "https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt"
     custom_stopwords = get_custom_stopwords(custom_stopwords_url)
-    wordcloud = WordCloud(width=800, height=800, 
-                          background_color='white', 
-                          stopwords=custom_stopwords, 
+    wordcloud = WordCloud(width=800, height=800,
+                          background_color='white',
+                          stopwords=custom_stopwords,
                           min_font_size=10).generate(words)
-    
-    # Create a matplotlib figure
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.imshow(wordcloud)
     ax.axis("off")
-    ax.set_title("Word Cloud")
-    st.pyplot(fig)  # Pass the figure to streamlit.pyplot
+    st.pyplot(fig)
 
 def analyze_sentiment(text):
-    nltk.download("vader_lexicon", quiet=True)
     from nltk.sentiment.vader import SentimentIntensityAnalyzer
     sid = SentimentIntensityAnalyzer()
     sentiment = sid.polarity_scores(text)
