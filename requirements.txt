@@ -4,3 +4,4 @@ seaborn
 nltk 
 wordcloud 
 google-api-python-client
+requests
