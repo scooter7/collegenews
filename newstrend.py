@@ -9,10 +9,12 @@ import boto3
 from datetime import datetime
 from collections import Counter
 
-nltk.download("punkt")
-nltk.download("vader_lexicon")
-nltk.download("stopwords")
+# Ensure necessary NLTK downloads
+nltk.download("punkt", quiet=True)
+nltk.download("vader_lexicon", quiet=True)
+nltk.download("stopwords", quiet=True)
 
+# Predefined keywords for analysis
 KEYWORDS = ["technology", "health", "finance", "sports", "entertainment"]
 
 def get_custom_stopwords(url):
@@ -96,9 +98,10 @@ def upload_to_s3(bucket, filepath, data):
             aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
         )
         s3.put_object(Bucket=bucket, Key=filepath, Body=data)
-        print("Data successfully uploaded to S3.")
+        return True
     except Exception as e:
-        print(f"Failed to upload data to S3: {e}")
+        st.error(f"Failed to upload data to S3: {e}")
+        return False
 
 def download_from_s3(bucket, filepath):
     try:
@@ -108,10 +111,9 @@ def download_from_s3(bucket, filepath):
             aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
         )
         response = s3.get_object(Bucket=bucket, Key=filepath)
-        print("Data successfully downloaded from S3.")
         return pd.read_csv(response['Body'])
     except Exception as e:
-        print(f"Failed to download data from S3: {e}")
+        st.error(f"Failed to download data from S3: {e}")
         return pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
 
 def main():
@@ -119,6 +121,7 @@ def main():
 
     keyword = st.selectbox("Select a keyword to analyze:", KEYWORDS)
 
+    # Attempt to load historical data from S3
     historical_data = download_from_s3('strategicinsights', 'news.csv')
 
     if st.button("Search"):
@@ -170,11 +173,11 @@ def main():
                 st.line_chart(key_data.set_index('Date')['Sentiment'])
 
     if st.button("Update"):
-        print("Updating S3 with the following data:")
-        print(historical_data)
         csv_data = historical_data.to_csv(index=False)
-        upload_to_s3('strategicinsights', 'news.csv', csv_data.encode())
-        st.success("Updated data uploaded to S3.")
+        if upload_to_s3('strategicinsights', 'news.csv', csv_data.encode()):
+            st.success("Updated data uploaded to S3.")
+        else:
+            st.error("Failed to update data on S3.")
 
 if __name__ == "__main__":
     main()
