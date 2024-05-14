@@ -10,7 +10,7 @@ from datetime import datetime
 from collections import Counter
 from io import StringIO
 
-# Download necessary NLTK resources
+# Ensure necessary NLTK resources
 nltk.download("punkt", quiet=True)
 nltk.download("vader_lexicon", quiet=True)
 nltk.download("stopwords", quiet=True)
@@ -101,12 +101,15 @@ def upload_csv_to_s3(df):
             )
             csv_buffer = StringIO()
             df.to_csv(csv_buffer, index=False)
+            csv_buffer.seek(0)  # Rewind the buffer before reading
             response = s3.put_object(
                 Bucket=st.secrets["aws"]["bucket_name"], 
                 Key=st.secrets["aws"]["object_key"], 
                 Body=csv_buffer.getvalue()
             )
             st.write(f"Data saved to S3 bucket. Response: {response}")
+            st.write("Here is what was sent to S3:")
+            st.write(df)
         else:
             st.error("AWS credentials not found in Streamlit secrets.")
     except Exception as e:
@@ -118,18 +121,24 @@ def main():
     keyword = st.selectbox("Select a keyword to analyze:", KEYWORDS)
 
     try:
+        historical_data = pd.DataFrame()
         if "aws" in st.secrets:
             s3 = boto3.client(
                 's3',
                 aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
                 aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
             )
-            obj = s3.get_object(Bucket=st.secrets["aws"]["bucket_name"], Key=st.secrets["aws"]["object_key"])
-            historical_data = pd.read_csv(obj['Body'])
-            st.write("Loaded historical data successfully from S3.")
+            # Check if the object exists to avoid the NoSuchKey error
+            response = s3.list_objects_v2(Bucket=st.secrets["aws"]["bucket_name"], Prefix=st.secrets["aws"]["object_key"])
+            if 'Contents' in response:
+                obj = s3.get_object(Bucket=st.secrets["aws"]["bucket_name"], Key=st.secrets["aws"]["object_key"])
+                historical_data = pd.read_csv(obj['Body'])
+                st.write("Loaded historical data successfully from S3.")
+            else:
+                st.write("Initialized empty dataset as news.csv does not exist yet.")
         else:
             historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
-            st.write("Initialized empty dataset.")
+            st.write("Initialized empty dataset due to missing AWS secrets.")
     except Exception as e:
         st.error(f"Error loading historical data: {e}")
         historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
