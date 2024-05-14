@@ -9,6 +9,11 @@ import boto3
 from datetime import datetime
 from collections import Counter
 
+# Ensure NLTK resources are downloaded
+nltk.download("punkt")
+nltk.download("vader_lexicon")
+nltk.download("stopwords")
+
 # Predefined keywords for analysis
 KEYWORDS = ["technology", "health", "finance", "sports", "entertainment"]
 
@@ -70,7 +75,6 @@ def render_sentiment_gauge(score):
     st_echarts(options=option, height="400px")
 
 def analyze_sentiment(text):
-    nltk.download("vader_lexicon", quiet=True)
     from nltk.sentiment.vader import SentimentIntensityAnalyzer
     sid = SentimentIntensityAnalyzer()
     sentiment = sid.polarity_scores(text)
@@ -88,13 +92,19 @@ def fetch_news(query):
     return response.json()
 
 def upload_to_s3(bucket, filepath, data):
-    s3 = boto3.client('s3', aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
-                      aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"])
+    s3 = boto3.client(
+        's3',
+        aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
+        aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
+    )
     s3.put_object(Bucket=bucket, Key=filepath, Body=data)
 
 def download_from_s3(bucket, filepath):
-    s3 = boto3.client('s3', aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
-                      aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"])
+    s3 = boto3.client(
+        's3',
+        aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
+        aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
+    )
     response = s3.get_object(Bucket=bucket, Key=filepath)
     return pd.read_csv(response['Body'])
 
