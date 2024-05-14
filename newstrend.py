@@ -138,13 +138,16 @@ def main():
                 st.markdown("---")
 
             if news_text:
+                # Word Cloud
                 st.write("Aggregate Word Cloud:")
                 plot_wordcloud(nltk.word_tokenize(news_text.lower()))
 
+                # Sentiment Analysis
                 sentiment_score = analyze_sentiment(news_text)
                 st.write("Aggregate Sentiment:")
                 render_sentiment_gauge(sentiment_score)
 
+                # Process text for topics
                 nltk_stopwords = set(stopwords.words('english'))
                 custom_stopwords_url = "https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt"
                 custom_stopwords = get_custom_stopwords(custom_stopwords_url)
@@ -165,19 +168,21 @@ def main():
 
                 st.table(update_df)
 
+                # Append new data to session state
                 st.session_state.historical_data = pd.concat([st.session_state.historical_data, update_df])
+
+                # Sentiment Trend Analysis for the current keyword
+                try:
+                    plot_data = st.session_state.historical_data.copy()
+                    plot_data['Date'] = pd.to_datetime(plot_data['Date'])
+                    key_data = plot_data[plot_data['Keyword'] == keyword]
+                    if not key_data.empty:
+                        st.subheader(f"Sentiment Trend for '{keyword}':")
+                        st.line_chart(key_data.set_index('Date')['Sentiment'])
+                except Exception as e:
+                    st.error(f"Failed to plot sentiment data for '{keyword}': {e}")
         else:
             st.write("No results found for this keyword.")
-
-    if not st.session_state.historical_data.empty:
-        st.write("Sentiment Trend Analysis for All Keywords:")
-        plot_data = st.session_state.historical_data.copy()
-        plot_data['Date'] = pd.to_datetime(plot_data['Date'])
-        for key in KEYWORDS:
-            key_data = plot_data[plot_data['Keyword'] == key]
-            if not key_data.empty:
-                st.subheader(f"Sentiment Over Time: {key}")
-                st.line_chart(key_data.set_index('Date')['Sentiment'])
 
     if st.button("Update All Data to S3"):
         st.write("Attempting to save all data to S3...")
