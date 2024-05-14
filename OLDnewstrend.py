@@ -14,14 +14,19 @@ from io import StringIO
 nltk.download("punkt", quiet=True)
 nltk.download("vader_lexicon", quiet=True)
 nltk.download("stopwords", quiet=True)
+from nltk.corpus import stopwords
 
 # Predefined keywords for analysis
 KEYWORDS = ["technology", "health", "finance", "sports", "entertainment"]
 
 def get_custom_stopwords(url):
-    response = requests.get(url)
-    stopwords = set(response.text.split())
-    return stopwords
+    try:
+        response = requests.get(url)
+        stopwords = set(response.text.split())
+        return stopwords
+    except Exception as e:
+        st.error(f"Failed to fetch custom stopwords: {e}")
+        return set()
 
 def plot_wordcloud(words):
     custom_stopwords_url = "https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt"
@@ -29,7 +34,7 @@ def plot_wordcloud(words):
     wordcloud = WordCloud(width=800, height=800,
                           background_color='white',
                           stopwords=custom_stopwords,
-                          min_font_size=10).generate(words)
+                          min_font_size=10).generate(' '.join(words))
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.imshow(wordcloud)
     ax.axis("off")
@@ -139,14 +144,21 @@ def main():
 
             if news_text:
                 st.write("Aggregate Word Cloud:")
-                plot_wordcloud(news_text)
+                # Analyze sentiment before filtering out stopwords to get more context
                 sentiment_score = analyze_sentiment(news_text)
                 st.write("Aggregate Sentiment:")
                 render_sentiment_gauge(sentiment_score)
 
-                words = nltk.word_tokenize(news_text)
-                words = [word for word in words if word.isalpha()]
-                most_common_words = Counter(words).most_common(5)
+                # Tokenize and remove stopwords
+                nltk_stopwords = set(stopwords.words('english'))
+                custom_stopwords_url = "https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt"
+                custom_stopwords = get_custom_stopwords(custom_stopwords_url)
+                all_stopwords = nltk_stopwords.union(custom_stopwords)
+
+                words = nltk.word_tokenize(news_text.lower())  # Convert to lower case
+                filtered_words = [word for word in words if word.isalpha() and word not in all_stopwords]
+                
+                most_common_words = Counter(filtered_words).most_common(5)
                 top_words = ', '.join(word for word, count in most_common_words)
 
                 update_df = pd.DataFrame({
