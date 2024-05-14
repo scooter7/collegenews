@@ -9,15 +9,12 @@ import boto3
 from datetime import datetime
 from collections import Counter
 
-# Ensure NLTK resources are downloaded
 nltk.download("punkt")
 nltk.download("vader_lexicon")
 nltk.download("stopwords")
 
-# Predefined keywords for analysis
 KEYWORDS = ["technology", "health", "finance", "sports", "entertainment"]
 
-# Function to fetch custom stopwords
 def get_custom_stopwords(url):
     response = requests.get(url)
     stopwords = set(response.text.split())
@@ -92,33 +89,37 @@ def fetch_news(query):
     return response.json()
 
 def upload_to_s3(bucket, filepath, data):
-    s3 = boto3.client(
-        's3',
-        aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
-        aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
-    )
-    s3.put_object(Bucket=bucket, Key=filepath, Body=data)
+    try:
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
+            aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
+        )
+        s3.put_object(Bucket=bucket, Key=filepath, Body=data)
+        print("Data successfully uploaded to S3.")
+    except Exception as e:
+        print(f"Failed to upload data to S3: {e}")
 
 def download_from_s3(bucket, filepath):
-    s3 = boto3.client(
-        's3',
-        aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
-        aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
-    )
-    response = s3.get_object(Bucket=bucket, Key=filepath)
-    return pd.read_csv(response['Body'])
+    try:
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
+            aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
+        )
+        response = s3.get_object(Bucket=bucket, Key=filepath)
+        print("Data successfully downloaded from S3.")
+        return pd.read_csv(response['Body'])
+    except Exception as e:
+        print(f"Failed to download data from S3: {e}")
+        return pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
 
 def main():
     st.title("News Feed Analyzer")
 
     keyword = st.selectbox("Select a keyword to analyze:", KEYWORDS)
 
-    try:
-        historical_data = download_from_s3('strategicinsights', 'news.csv')
-        print("Historical data loaded successfully.")
-    except Exception as e:
-        historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
-        st.write("Failed to load historical data from S3:", e)
+    historical_data = download_from_s3('strategicinsights', 'news.csv')
 
     if st.button("Search"):
         results = fetch_news(keyword)
@@ -174,3 +175,6 @@ def main():
         csv_data = historical_data.to_csv(index=False)
         upload_to_s3('strategicinsights', 'news.csv', csv_data.encode())
         st.success("Updated data uploaded to S3.")
+
+if __name__ == "__main__":
+    main()
