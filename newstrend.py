@@ -111,20 +111,16 @@ def download_from_s3(bucket, filepath):
 def main():
     st.title("News Feed Analyzer")
 
-    # Display the predefined keywords for selection
     keyword = st.selectbox("Select a keyword to analyze:", KEYWORDS)
 
-    # Load historical data from S3 for sentiment trend analysis
     try:
         historical_data = download_from_s3('strategicinsights', 'news.csv')
+        print("Historical data loaded successfully.")
     except Exception as e:
         historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
         st.write("Failed to load historical data from S3:", e)
 
     if st.button("Search"):
-        all_words = []
-        all_scores = []
-
         results = fetch_news(keyword)
         news_text = ""
         if results.get("articles"):
@@ -136,6 +132,7 @@ def main():
                 st.markdown(f"#### [{title}]({url})")
                 st.markdown(f"*{description}*")
                 st.markdown("---")
+
             if news_text:
                 st.write("Aggregate Word Cloud:")
                 plot_wordcloud(news_text)
@@ -148,7 +145,6 @@ def main():
                 most_common_words = Counter(words).most_common(5)
                 top_words = ', '.join(word for word, count in most_common_words)
 
-                # Update table with top words and sentiment
                 st.table(pd.DataFrame({
                     "Keyword": [keyword],
                     "Top Words": [top_words],
@@ -173,9 +169,8 @@ def main():
                 st.line_chart(key_data.set_index('Date')['Sentiment'])
 
     if st.button("Update"):
+        print("Updating S3 with the following data:")
+        print(historical_data)
         csv_data = historical_data.to_csv(index=False)
         upload_to_s3('strategicinsights', 'news.csv', csv_data.encode())
         st.success("Updated data uploaded to S3.")
-
-if __name__ == "__main__":
-    main()
