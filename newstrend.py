@@ -92,17 +92,17 @@ def fetch_news(query):
     return response.json()
 
 def upload_csv_to_s3(df):
-    if "AWS" in st.secrets:
+    if "aws" in st.secrets:
         s3 = boto3.client(
             's3',
-            aws_access_key_id=st.secrets["AWS"]["aws_access_key_id"],
-            aws_secret_access_key=st.secrets["AWS"]["aws_secret_access_key"]
+            aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
+            aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
         )
         csv_buffer = StringIO()
         df.to_csv(csv_buffer, index=False)
         response = s3.put_object(
-            Bucket=st.secrets["AWS"]["bucket_name"], 
-            Key=st.secrets["AWS"]["object_key"], 
+            Bucket=st.secrets["aws"]["bucket_name"], 
+            Key=st.secrets["aws"]["object_key"], 
             Body=csv_buffer.getvalue()
         )
         st.write("Data saved to S3 bucket.")
@@ -116,13 +116,13 @@ def main():
 
     try:
         historical_data = pd.DataFrame()
-        if "AWS" in st.secrets:
+        if "aws" in st.secrets:
             s3 = boto3.client(
                 's3',
-                aws_access_key_id=st.secrets["AWS"]["aws_access_key_id"],
-                aws_secret_access_key=st.secrets["AWS"]["aws_secret_access_key"]
+                aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
+                aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
             )
-            obj = s3.get_object(Bucket=st.secrets["AWS"]["bucket_name"], Key=st.secrets["AWS"]["object_key"])
+            obj = s3.get_object(Bucket=st.secrets["aws"]["bucket_name"], Key=st.secrets["aws"]["object_key"])
             historical_data = pd.read_csv(obj['Body'])
             st.write("Loaded historical data successfully.")
         else:
