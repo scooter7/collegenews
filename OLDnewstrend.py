@@ -17,7 +17,7 @@ nltk.download("stopwords", quiet=True)
 from nltk.corpus import stopwords
 
 # Predefined keywords for analysis, with phrases wrapped in quotes
-KEYWORDS = ["technology", "health", "finance", "sports", "entertainment", '"Harvard University"']
+KEYWORDS = ['"Columbia University"', '"Yale University"', '"Brown University"', '"Cornell University"', '"Princeton University"', '"Harvard University"']
 
 def get_custom_stopwords(url):
     try:
