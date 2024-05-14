@@ -17,7 +17,8 @@ nltk.download("stopwords", quiet=True)
 from nltk.corpus import stopwords
 
 # Predefined keywords for analysis, with phrases wrapped in quotes
-KEYWORDS = ['"Columbia University"', '"Yale University"', '"Brown University"', '"Cornell University"', '"Princeton University"', '"Harvard University"']
+KEYWORDS = ['"Columbia University"', '"Yale University"', '"Brown University"', 
+            '"Cornell University"', '"Princeton University"', '"Harvard University"']
 
 def get_custom_stopwords(url):
     try:
@@ -89,9 +90,10 @@ def analyze_sentiment(text):
 def fetch_news(query):
     ENDPOINT = 'https://newsapi.org/v2/everything'
     params = {
-        'q': query,  # The query can include phrases in quotes
+        'q': query,
         'apiKey': st.secrets["newsapi"]["api_key"],
         'pageSize': 10,
+        'sortBy': 'publishedAt'  # Ensures the most recent news are fetched
     }
     response = requests.get(ENDPOINT, params=params)
     return response.json()
@@ -149,8 +151,7 @@ def main():
 
                 # Process text for topics
                 nltk_stopwords = set(stopwords.words('english'))
-                custom_stopwords_url = "https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt"
-                custom_stopwords = get_custom_stopwords(custom_stopwords_url)
+                custom_stopwords = get_custom_stopwords("https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt")
                 all_stopwords = nltk_stopwords.union(custom_stopwords)
 
                 words = nltk.word_tokenize(news_text.lower())
@@ -187,9 +188,7 @@ def main():
     if st.button("Update All Data to S3"):
         st.write("Attempting to save all data to S3...")
         if not st.session_state.historical_data.empty:
-            bucket = st.secrets["aws"]["bucket_name"]
-            object_key = st.secrets["aws"]["object_key"]
-            upload_csv_to_s3(st.session_state.historical_data, bucket, object_key)
+            upload_csv_to_s3(st.session_state.historical_data, st.secrets["aws"]["bucket_name"], st.secrets["aws"]["object_key"])
         else:
             st.write("No data to save.")
 
