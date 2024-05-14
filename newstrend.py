@@ -124,12 +124,12 @@ def upload_csv_to_s3(df, bucket, object_key):
 def main():
     st.title("News Feed Analyzer")
 
-    keyword = st.selectbox("Select a keyword to analyze:", KEYWORDS)
-
     if 'historical_data' not in st.session_state:
         st.session_state.historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
-    
-    if st.button("Search"):
+
+    # Process each keyword and display results
+    for keyword in KEYWORDS:
+        st.header(f"Keyword: {keyword}")
         results = fetch_news(keyword)
         news_text = ""
         if results.get("articles"):
@@ -143,19 +143,22 @@ def main():
                 st.markdown("---")
 
             if news_text:
+                # Word Cloud
                 st.write("Aggregate Word Cloud:")
-                # Analyze sentiment before filtering out stopwords to get more context
+                plot_wordcloud(nltk.word_tokenize(news_text.lower()))
+
+                # Sentiment Analysis
                 sentiment_score = analyze_sentiment(news_text)
                 st.write("Aggregate Sentiment:")
                 render_sentiment_gauge(sentiment_score)
 
-                # Tokenize and remove stopwords
+                # Process text for topics
                 nltk_stopwords = set(stopwords.words('english'))
                 custom_stopwords_url = "https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt"
                 custom_stopwords = get_custom_stopwords(custom_stopwords_url)
                 all_stopwords = nltk_stopwords.union(custom_stopwords)
 
-                words = nltk.word_tokenize(news_text.lower())  # Convert to lower case
+                words = nltk.word_tokenize(news_text.lower())
                 filtered_words = [word for word in words if word.isalpha() and word not in all_stopwords]
                 
                 most_common_words = Counter(filtered_words).most_common(5)
@@ -173,20 +176,23 @@ def main():
                 # Append new data to session state
                 st.session_state.historical_data = pd.concat([st.session_state.historical_data, update_df])
         else:
-            st.write("No results found.")
+            st.write("No results found for this keyword.")
 
     if not st.session_state.historical_data.empty:
-        st.write("Sentiment Trend Analysis:")
+        st.write("Sentiment Trend Analysis for All Keywords:")
         try:
-            # Ensure the Date column is datetime type for proper chart plotting
             plot_data = st.session_state.historical_data.copy()
             plot_data['Date'] = pd.to_datetime(plot_data['Date'])
-            st.line_chart(plot_data.set_index('Date')['Sentiment'])
+            for key in KEYWORDS:
+                key_data = plot_data[plot_data['Keyword'] == key]
+                if not key_data.empty:
+                    st.subheader(f"Sentiment Over Time: {key}")
+                    st.line_chart(key_data.set_index('Date')['Sentiment'])
         except Exception as e:
             st.error(f"Failed to plot sentiment data: {e}")
 
-    if st.button("Update"):
-        st.write("Attempting to save data to S3...")
+    if st.button("Update All Data to S3"):
+        st.write("Attempting to save all data to S3...")
         if not st.session_state.historical_data.empty:
             bucket = st.secrets["aws"]["bucket_name"]
             object_key = st.secrets["aws"]["object_key"]
