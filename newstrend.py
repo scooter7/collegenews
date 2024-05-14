@@ -10,7 +10,7 @@ from datetime import datetime
 from collections import Counter
 from io import StringIO
 
-# Ensure necessary NLTK resources
+# Download necessary NLTK resources
 nltk.download("punkt", quiet=True)
 nltk.download("vader_lexicon", quiet=True)
 nltk.download("stopwords", quiet=True)
@@ -72,7 +72,7 @@ def render_sentiment_gauge(score):
             }
         ]
     }
-    st_echarts(options=option, height="400px")
+    st.echarts(options=option, height="400px")
 
 def analyze_sentiment(text):
     from nltk.sentiment.vader import SentimentIntensityAnalyzer
@@ -92,57 +92,35 @@ def fetch_news(query):
     return response.json()
 
 def upload_csv_to_s3(df):
-    try:
-        if "aws" in st.secrets:
-            s3 = boto3.client(
-                's3',
-                aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
-                aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
-            )
-            csv_buffer = StringIO()
-            df.to_csv(csv_buffer, index=False)
-            csv_buffer.seek(0)  # Rewind the buffer before reading
-            response = s3.put_object(
-                Bucket=st.secrets["aws"]["bucket_name"], 
-                Key=st.secrets["aws"]["object_key"], 
-                Body=csv_buffer.getvalue()
-            )
-            st.write(f"Data saved to S3 bucket. Response: {response}")
-            st.write("Here is what was sent to S3:")
-            st.write(df)
-        else:
-            st.error("AWS credentials not found in Streamlit secrets.")
-    except Exception as e:
-        st.error(f"Failed to upload data to S3: {e}")
+    if "aws" in st.secrets:
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
+            aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
+        )
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False)
+        csv_buffer.seek(0)  # Rewind the buffer
+        response = s3.put_object(
+            Bucket=st.secrets["aws"]["bucket_name"], 
+            Key=st.secrets["aws"]["object_key"], 
+            Body=csv_buffer.getvalue()
+        )
+        st.write("Data saved to S3 bucket. Response:", response)
+        st.write("Here is what was sent to S3:")
+        st.write(df)
+    else:
+        st.error("AWS credentials not found in Streamlit secrets.")
 
 def main():
     st.title("News Feed Analyzer")
 
     keyword = st.selectbox("Select a keyword to analyze:", KEYWORDS)
 
-    try:
-        historical_data = pd.DataFrame()
-        if "aws" in st.secrets:
-            s3 = boto3.client(
-                's3',
-                aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
-                aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
-            )
-            # Check if the object exists to avoid the NoSuchKey error
-            response = s3.list_objects_v2(Bucket=st.secrets["aws"]["bucket_name"], Prefix=st.secrets["aws"]["object_key"])
-            if 'Contents' in response:
-                obj = s3.get_object(Bucket=st.secrets["aws"]["bucket_name"], Key=st.secrets["aws"]["object_key"])
-                historical_data = pd.read_csv(obj['Body'])
-                st.write("Loaded historical data successfully from S3.")
-            else:
-                st.write("Initialized empty dataset as news.csv does not exist yet.")
-        else:
-            historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
-            st.write("Initialized empty dataset due to missing AWS secrets.")
-    except Exception as e:
-        st.error(f"Error loading historical data: {e}")
-        historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
-
+    # Use session state to keep track of historical data
+    if 'historical_data' not in st.session_state:
+        st.session_state.historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
+    
     if st.button("Search"):
         results = fetch_news(keyword)
         news_text = ""
@@ -175,22 +153,25 @@ def main():
                     "Sentiment": [sentiment_score]
                 })
 
-                st.table(update_df)
-
-                historical_data = pd.concat([historical_data, update_df])
+                # Append new data to session state
+                st.session_state.historical_data = pd.concat([st.session_state.historical_data, update_df])
+                st.write(update_df)
         else:
             st.write("No results found.")
 
-    if not historical_data.empty:
+    if not st.session_state.historical_data.empty:
         st.write("Sentiment Trend Analysis:")
         for key in KEYWORDS:
-            key_data = historical_data[historical_data['Keyword'] == key]
+            key_data = st.session_state.historical_data[st.session_state.historical_data['Keyword'] == key]
             if not key_data.empty:
                 st.line_chart(key_data.set_index('Date')['Sentiment'])
 
     if st.button("Update"):
         st.write("Attempting to save data to S3...")
-        upload_csv_to_s3(historical_data)
+        if not st.session_state.historical_data.empty:
+            upload_csv_to_s3(st.session_state.historical_data)
+        else:
+            st.write("No data to save.")
 
 if __name__ == "__main__":
     main()
