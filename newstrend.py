@@ -93,10 +93,13 @@ def fetch_news(query):
         'q': query,
         'apiKey': st.secrets["newsapi"]["api_key"],
         'pageSize': 10,
-        'sortBy': 'publishedAt'  # Ensures the most recent news are fetched
+        'sortBy': 'publishedAt'
     }
     response = requests.get(ENDPOINT, params=params)
-    return response.json()
+    print(f"Fetching news for {query}: {response.url}")  # Log the full URL
+    response_json = response.json()
+    print(f"Response: {response_json}")  # Log the response JSON
+    return response_json
 
 def upload_csv_to_s3(df, bucket, object_key):
     s3 = boto3.client(
