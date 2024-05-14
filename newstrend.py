@@ -3,14 +3,14 @@ import requests
 import nltk
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
-from streamlit_echarts import st_echarts
+from streamlit_echarts import st_echarts  # Corrected import
 import pandas as pd
 import boto3
 from datetime import datetime
 from collections import Counter
 from io import StringIO
 
-# Download necessary NLTK resources
+# Ensure necessary NLTK resources
 nltk.download("punkt", quiet=True)
 nltk.download("vader_lexicon", quiet=True)
 nltk.download("stopwords", quiet=True)
@@ -72,7 +72,7 @@ def render_sentiment_gauge(score):
             }
         ]
     }
-    st.echarts(options=option, height="400px")
+    st_echarts(options=option, height="400px")  # Use the imported st_echarts
 
 def analyze_sentiment(text):
     from nltk.sentiment.vader import SentimentIntensityAnalyzer
@@ -100,10 +100,10 @@ def upload_csv_to_s3(df):
         )
         csv_buffer = StringIO()
         df.to_csv(csv_buffer, index=False)
-        csv_buffer.seek(0)  # Rewind the buffer
+        csv_buffer.seek(0)
         response = s3.put_object(
-            Bucket=st.secrets["aws"]["bucket_name"], 
-            Key=st.secrets["aws"]["object_key"], 
+            Bucket=st.secrets["aws"]["bucket_name"],
+            Key=st.secrets["aws"]["object_key"],
             Body=csv_buffer.getvalue()
         )
         st.write("Data saved to S3 bucket. Response:", response)
@@ -117,7 +117,6 @@ def main():
 
     keyword = st.selectbox("Select a keyword to analyze:", KEYWORDS)
 
-    # Use session state to keep track of historical data
     if 'historical_data' not in st.session_state:
         st.session_state.historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
     
@@ -153,9 +152,10 @@ def main():
                     "Sentiment": [sentiment_score]
                 })
 
+                st.table(update_df)
+
                 # Append new data to session state
                 st.session_state.historical_data = pd.concat([st.session_state.historical_data, update_df])
-                st.write(update_df)
         else:
             st.write("No results found.")
 
