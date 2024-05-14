@@ -3,7 +3,7 @@ import requests
 import nltk
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
-from streamlit_echarts import st_echarts  # Corrected import
+from streamlit_echarts import st_echarts
 import pandas as pd
 import boto3
 from datetime import datetime
@@ -72,7 +72,7 @@ def render_sentiment_gauge(score):
             }
         ]
     }
-    st_echarts(options=option, height="400px")  # Use the imported st_echarts
+    st_echarts(options=option, height="400px")
 
 def analyze_sentiment(text):
     from nltk.sentiment.vader import SentimentIntensityAnalyzer
@@ -161,10 +161,14 @@ def main():
 
     if not st.session_state.historical_data.empty:
         st.write("Sentiment Trend Analysis:")
-        for key in KEYWORDS:
-            key_data = st.session_state.historical_data[st.session_state.historical_data['Keyword'] == key]
-            if not key_data.empty:
-                st.line_chart(key_data.set_index('Date')['Sentiment'])
+        data_to_plot = {
+            "Date": st.session_state.historical_data["Date"].tolist(),
+            "Sentiment": st.session_state.historical_data["Sentiment"].tolist()
+        }
+        if len(data_to_plot["Date"]) > 0 and len(data_to_plot["Sentiment"]) > 0:
+            st.line_chart(pd.DataFrame(data_to_plot, columns=["Date", "Sentiment"]).set_index("Date"))
+        else:
+            st.write("No sentiment data to display.")
 
     if st.button("Update"):
         st.write("Attempting to save data to S3...")
