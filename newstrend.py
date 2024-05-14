@@ -10,7 +10,7 @@ from datetime import datetime
 from collections import Counter
 from io import StringIO
 
-# Ensure necessary NLTK downloads
+# Download necessary NLTK resources
 nltk.download("punkt", quiet=True)
 nltk.download("vader_lexicon", quiet=True)
 nltk.download("stopwords", quiet=True)
@@ -92,22 +92,25 @@ def fetch_news(query):
     return response.json()
 
 def upload_csv_to_s3(df):
-    if "aws" in st.secrets:
-        s3 = boto3.client(
-            's3',
-            aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
-            aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
-        )
-        csv_buffer = StringIO()
-        df.to_csv(csv_buffer, index=False)
-        response = s3.put_object(
-            Bucket=st.secrets["aws"]["bucket_name"], 
-            Key=st.secrets["aws"]["object_key"], 
-            Body=csv_buffer.getvalue()
-        )
-        st.write("Data saved to S3 bucket.")
-    else:
-        st.error("AWS credentials not found in Streamlit secrets.")
+    try:
+        if "aws" in st.secrets:
+            s3 = boto3.client(
+                's3',
+                aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
+                aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
+            )
+            csv_buffer = StringIO()
+            df.to_csv(csv_buffer, index=False)
+            response = s3.put_object(
+                Bucket=st.secrets["aws"]["bucket_name"], 
+                Key=st.secrets["aws"]["object_key"], 
+                Body=csv_buffer.getvalue()
+            )
+            st.write(f"Data saved to S3 bucket. Response: {response}")
+        else:
+            st.error("AWS credentials not found in Streamlit secrets.")
+    except Exception as e:
+        st.error(f"Failed to upload data to S3: {e}")
 
 def main():
     st.title("News Feed Analyzer")
@@ -115,7 +118,6 @@ def main():
     keyword = st.selectbox("Select a keyword to analyze:", KEYWORDS)
 
     try:
-        historical_data = pd.DataFrame()
         if "aws" in st.secrets:
             s3 = boto3.client(
                 's3',
@@ -124,11 +126,12 @@ def main():
             )
             obj = s3.get_object(Bucket=st.secrets["aws"]["bucket_name"], Key=st.secrets["aws"]["object_key"])
             historical_data = pd.read_csv(obj['Body'])
-            st.write("Loaded historical data successfully.")
+            st.write("Loaded historical data successfully from S3.")
         else:
+            historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
             st.write("Initialized empty dataset.")
     except Exception as e:
-        st.write(f"Error loading historical data: {e}")
+        st.error(f"Error loading historical data: {e}")
         historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
 
     if st.button("Search"):
@@ -177,6 +180,7 @@ def main():
                 st.line_chart(key_data.set_index('Date')['Sentiment'])
 
     if st.button("Update"):
+        st.write("Attempting to save data to S3...")
         upload_csv_to_s3(historical_data)
 
 if __name__ == "__main__":
