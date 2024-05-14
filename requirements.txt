@@ -5,3 +5,5 @@ matplotlib
 wordcloud
 Pillow  # Dependency for wordcloud
 streamlit-echarts
+pandas
+boto3
