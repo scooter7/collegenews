@@ -91,26 +91,30 @@ def fetch_news(query):
     response = requests.get(ENDPOINT, params=params)
     return response.json()
 
-def upload_csv_to_s3(df):
-    if "aws" in st.secrets:
-        s3 = boto3.client(
-            's3',
-            aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
-            aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
-        )
-        csv_buffer = StringIO()
-        df.to_csv(csv_buffer, index=False)
-        csv_buffer.seek(0)
-        response = s3.put_object(
-            Bucket=st.secrets["aws"]["bucket_name"],
-            Key=st.secrets["aws"]["object_key"],
-            Body=csv_buffer.getvalue()
-        )
-        st.write("Data saved to S3 bucket. Response:", response)
-        st.write("Here is what was sent to S3:")
-        st.write(df)
-    else:
-        st.error("AWS credentials not found in Streamlit secrets.")
+def upload_csv_to_s3(df, bucket, object_key):
+    """Uploads the given DataFrame to S3, appending to the existing data."""
+    s3 = boto3.client(
+        's3',
+        aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
+        aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
+    )
+
+    # Try to download the existing data from S3 and append the new data
+    try:
+        response = s3.get_object(Bucket=bucket, Key=object_key)
+        existing_data = pd.read_csv(response['Body'])
+        st.write("Existing data loaded from S3 for appending.")
+        combined_data = pd.concat([existing_data, df], ignore_index=True)
+    except Exception as e:
+        st.write(f"Could not load existing data from S3, assuming new file. Error: {e}")
+        combined_data = df
+
+    # Upload the combined data
+    csv_buffer = StringIO()
+    combined_data.to_csv(csv_buffer, index=False)
+    csv_buffer.seek(0)
+    s3.put_object(Bucket=bucket, Key=object_key, Body=csv_buffer.getvalue())
+    st.write(f"Data appended and uploaded to S3 bucket `{bucket}` at `{object_key}`.")
 
 def main():
     st.title("News Feed Analyzer")
@@ -161,19 +165,20 @@ def main():
 
     if not st.session_state.historical_data.empty:
         st.write("Sentiment Trend Analysis:")
-        data_to_plot = {
-            "Date": st.session_state.historical_data["Date"].tolist(),
-            "Sentiment": st.session_state.historical_data["Sentiment"].tolist()
-        }
-        if len(data_to_plot["Date"]) > 0 and len(data_to_plot["Sentiment"]) > 0:
-            st.line_chart(pd.DataFrame(data_to_plot, columns=["Date", "Sentiment"]).set_index("Date"))
-        else:
-            st.write("No sentiment data to display.")
+        try:
+            # Ensure the Date column is datetime type for proper chart plotting
+            plot_data = st.session_state.historical_data.copy()
+            plot_data['Date'] = pd.to_datetime(plot_data['Date'])
+            st.line_chart(plot_data.set_index('Date')['Sentiment'])
+        except Exception as e:
+            st.error(f"Failed to plot sentiment data: {e}")
 
     if st.button("Update"):
         st.write("Attempting to save data to S3...")
         if not st.session_state.historical_data.empty:
-            upload_csv_to_s3(st.session_state.historical_data)
+            bucket = st.secrets["aws"]["bucket_name"]
+            object_key = st.secrets["aws"]["object_key"]
+            upload_csv_to_s3(st.session_state.historical_data, bucket, object_key)
         else:
             st.write("No data to save.")
 
