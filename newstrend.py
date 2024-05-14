@@ -17,7 +17,7 @@ nltk.download("stopwords", quiet=True)
 from nltk.corpus import stopwords
 
 # Predefined keywords for analysis, with phrases wrapped in quotes
-KEYWORDS = ['"Columbia University"', '"Yale University"', '"Brown University"', 
+KEYWORDS = ['"Columbia University"', '"Yale University"', '"Brown University"',
             '"Cornell University"', '"Princeton University"', '"Harvard University"']
 
 def get_custom_stopwords(url):
@@ -57,10 +57,10 @@ def render_sentiment_gauge(score):
                     "lineStyle": {
                         "width": 15,
                         "color": [
-                            [0.33, '#FF4500'], 
-                            [0.5, '#FFD93D'],    
-                            [0.67, '#FFD93D'],   
-                            [1, '#6DD400']       
+                            [0.33, '#FF4500'],
+                            [0.5, '#FFD93D'],
+                            [0.67, '#FFD93D'],
+                            [1, '#6DD400']
                         ]
                     }
                 },
@@ -96,10 +96,10 @@ def fetch_news(query):
         'sortBy': 'publishedAt'
     }
     response = requests.get(ENDPOINT, params=params)
-    print(f"Fetching news for {query}: {response.url}")  # Log the full URL
-    response_json = response.json()
-    print(f"Response: {response_json}")  # Log the response JSON
-    return response_json
+    if response.status_code == 429:  # Check if the API limit has been exceeded
+        st.warning("API call limit exceeded. Using cached data.")
+        return {}
+    return response.json()
 
 def upload_csv_to_s3(df, bucket, object_key):
     s3 = boto3.client(
@@ -127,12 +127,26 @@ def main():
 
     if 'historical_data' not in st.session_state:
         st.session_state.historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
+    if 'last_successful_data' not in st.session_state:
+        st.session_state.last_successful_data = {}
 
     for keyword in KEYWORDS:
         st.header(f"Keyword: {keyword}")
         results = fetch_news(keyword)
+
+        if not results:  # If the API limit is exceeded or error in fetching
+            if keyword in st.session_state.last_successful_data:
+                st.info(f"No new data due to API limits. Showing cached results for {keyword}.")
+                results = st.session_state.last_successful_data[keyword]
+            else:
+                st.error(f"No results found and no cache available for {keyword}.")
+                continue
+        
         news_text = ""
-        if results.get("articles"):
+        if results.get("status") == "ok" and results.get("articles"):
+            # Cache the successful fetch
+            st.session_state.last_successful_data[keyword] = results
+            
             for article in results["articles"]:
                 title = article['title']
                 description = article['description'] or "No description available"
@@ -186,7 +200,12 @@ def main():
                 except Exception as e:
                     st.error(f"Failed to plot sentiment data for '{keyword}': {e}")
         else:
-            st.write("No results found for this keyword.")
+            st.info(f"No results found for {keyword}. Using cached data if available.")
+            if keyword in st.session_state.last_successful_data:
+                st.info(f"Displaying cached results for {keyword}.")
+                # You can add display logic for cached data here if needed
+            else:
+                st.error("No cached data available.")
 
     if st.button("Update All Data to S3"):
         st.write("Attempting to save all data to S3...")
