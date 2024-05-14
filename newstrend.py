@@ -16,8 +16,8 @@ nltk.download("vader_lexicon", quiet=True)
 nltk.download("stopwords", quiet=True)
 from nltk.corpus import stopwords
 
-# Predefined keywords for analysis
-KEYWORDS = ["technology", "health", "finance", "sports", "entertainment"]
+# Predefined keywords for analysis, with phrases wrapped in quotes
+KEYWORDS = ["technology", "health", "finance", "sports", "entertainment", '"Harvard University"']
 
 def get_custom_stopwords(url):
     try:
@@ -89,7 +89,7 @@ def analyze_sentiment(text):
 def fetch_news(query):
     ENDPOINT = 'https://newsapi.org/v2/everything'
     params = {
-        'q': query,
+        'q': query,  # The query can include phrases in quotes
         'apiKey': st.secrets["newsapi"]["api_key"],
         'pageSize': 10,
     }
@@ -97,14 +97,11 @@ def fetch_news(query):
     return response.json()
 
 def upload_csv_to_s3(df, bucket, object_key):
-    """Uploads the given DataFrame to S3, appending to the existing data."""
     s3 = boto3.client(
         's3',
         aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
         aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
     )
-
-    # Try to download the existing data from S3 and append the new data
     try:
         response = s3.get_object(Bucket=bucket, Key=object_key)
         existing_data = pd.read_csv(response['Body'])
@@ -114,7 +111,6 @@ def upload_csv_to_s3(df, bucket, object_key):
         st.write(f"Could not load existing data from S3, assuming new file. Error: {e}")
         combined_data = df
 
-    # Upload the combined data
     csv_buffer = StringIO()
     combined_data.to_csv(csv_buffer, index=False)
     csv_buffer.seek(0)
@@ -127,7 +123,6 @@ def main():
     if 'historical_data' not in st.session_state:
         st.session_state.historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
 
-    # Process each keyword and display results
     for keyword in KEYWORDS:
         st.header(f"Keyword: {keyword}")
         results = fetch_news(keyword)
@@ -143,16 +138,13 @@ def main():
                 st.markdown("---")
 
             if news_text:
-                # Word Cloud
                 st.write("Aggregate Word Cloud:")
                 plot_wordcloud(nltk.word_tokenize(news_text.lower()))
 
-                # Sentiment Analysis
                 sentiment_score = analyze_sentiment(news_text)
                 st.write("Aggregate Sentiment:")
                 render_sentiment_gauge(sentiment_score)
 
-                # Process text for topics
                 nltk_stopwords = set(stopwords.words('english'))
                 custom_stopwords_url = "https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt"
                 custom_stopwords = get_custom_stopwords(custom_stopwords_url)
@@ -173,23 +165,19 @@ def main():
 
                 st.table(update_df)
 
-                # Append new data to session state
                 st.session_state.historical_data = pd.concat([st.session_state.historical_data, update_df])
         else:
             st.write("No results found for this keyword.")
 
     if not st.session_state.historical_data.empty:
         st.write("Sentiment Trend Analysis for All Keywords:")
-        try:
-            plot_data = st.session_state.historical_data.copy()
-            plot_data['Date'] = pd.to_datetime(plot_data['Date'])
-            for key in KEYWORDS:
-                key_data = plot_data[plot_data['Keyword'] == key]
-                if not key_data.empty:
-                    st.subheader(f"Sentiment Over Time: {key}")
-                    st.line_chart(key_data.set_index('Date')['Sentiment'])
-        except Exception as e:
-            st.error(f"Failed to plot sentiment data: {e}")
+        plot_data = st.session_state.historical_data.copy()
+        plot_data['Date'] = pd.to_datetime(plot_data['Date'])
+        for key in KEYWORDS:
+            key_data = plot_data[plot_data['Keyword'] == key]
+            if not key_data.empty:
+                st.subheader(f"Sentiment Over Time: {key}")
+                st.line_chart(key_data.set_index('Date')['Sentiment'])
 
     if st.button("Update All Data to S3"):
         st.write("Attempting to save all data to S3...")
