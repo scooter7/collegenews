@@ -143,7 +143,7 @@ def main():
         st.session_state.last_successful_data = {}
 
     for keyword in KEYWORDS:
-        st.header(f"Keyword: {keyword.strip('"')}")
+        st.header(f"Keyword: {keyword.strip('\"')}")
         articles = fetch_news(keyword)
 
         if not articles:
