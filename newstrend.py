@@ -22,8 +22,8 @@ from nltk.corpus import stopwords
 googlenews = GoogleNews()
 
 # Keywords for analysis
-KEYWORDS = ['"Columbia University"', '"Yale University"', '"Brown University"',
-            '"Cornell University"', '"Princeton University"', '"Harvard University"']
+KEYWORDS = ['Columbia University', 'Yale University', 'Brown University',
+            'Cornell University', 'Princeton University', 'Harvard University']
 
 def get_custom_stopwords(url):
     try:
@@ -126,13 +126,13 @@ def upload_csv_to_s3(df, bucket, object_key):
         aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
         aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
     )
-    try :
+    try:
         csv_buffer = StringIO()
         df.to_csv(csv_buffer, index=False)
         csv_buffer.seek(0)
         s3.put_object(Bucket=bucket, Key=object_key, Body=csv_buffer.getvalue())
         st.write(f"Data uploaded to S3 bucket `{bucket}` at `{object_key}`.")
-    except Exception as e:
+    } catch Exception as e:
         st.error(f"Failed to upload data to S3: {e}")
 
 def main():
@@ -184,20 +184,21 @@ def main():
 
             combined_data = pd.concat([combined_data, update_df])
 
-        # Filter and sort the data for the current keyword
-        keyword_data = combined_data[combined_data['Keyword'] == keyword]
-        keyword_data['Date'] = pd.to_datetime(keyword_data['Date'], errors='coerce').dt.date
-        keyword_data = keyword_data.sort_values('Date').groupby('Date').last().reset_index()
+            # Process the data for sentiment trend chart
+            keyword_data = combined_data[combined_data['Keyword'] == keyword].copy()
+            keyword_data['Date'] = pd.to_datetime(keyword_data['Date'], errors='coerce').dt.date
+            keyword_data = keyword_data.dropna(subset=['Date'])
+            keyword_data = keyword_data.sort_values('Date').groupby('Date').last().reset_index()
 
-        # Display sentiment trend chart
-        if not keyword_data.empty:
-            st.subheader(f"Sentiment Trend for \"{keyword}\":")
-            line_chart = alt.Chart(keyword_data).mark_line(point=True).encode(
-                x=alt.X('Date:T', axis=alt.Axis(title='Date')),
-                y=alt.Y('Sentiment:Q', axis=alt.Axis(title='Sentiment Score')),
-                tooltip=['Date:T', 'Sentiment:Q']
-            ).properties(width=700, height=400).interactive()
-            st.altair_chart(line_chart)
+            # Display sentiment trend chart
+            if not keyword_data.empty:
+                st.subheader(f"Sentiment Trend for \"{keyword}\":")
+                line_chart = alt.Chart(keyword_data).mark_line(point=True).encode(
+                    x=alt.X('Date:T', axis=alt.Axis(title='Date')),
+                    y=alt.Y('Sentiment:Q', axis=alt.Axis(title='Sentiment Score')),
+                    tooltip=['Date:T', 'Sentiment:Q']
+                ).properties(width=700, height=400).interactive()
+                st.altair_chart(line_chart)
 
     # Update S3 with the combined data after processing all keywords
     if st.button("Update All Data to S3"):
