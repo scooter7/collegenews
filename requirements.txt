@@ -8,3 +8,4 @@ streamlit-echarts
 pandas
 boto3
 GoogleNews
+altair
