@@ -10,6 +10,7 @@ from datetime import datetime
 from collections import Counter
 from io import StringIO
 from GoogleNews import GoogleNews
+import altair as alt
 
 # Download necessary NLTK data and models
 nltk.download("punkt", quiet=True)
@@ -170,7 +171,7 @@ def main():
             top_words = ', '.join(word for word, count in most_common_words)
 
             update_df = pd.DataFrame({
-                "Date": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+                "Date": [datetime.now().strftime("%Y-%m-%d")],
                 "Keyword": [keyword],
                 "Topics": [top_words],
                 "Sentiment": [sentiment_score]
@@ -180,15 +181,29 @@ def main():
 
             st.session_state.historical_data = pd.concat([st.session_state.historical_data, update_df])
 
-            try:
-                plot_data = st.session_state.historical_data.copy()
-                plot_data['Date'] = pd.to_datetime(plot_data['Date'])
-                key_data = plot_data[plot_data['Keyword'] == keyword]
-                if not key_data.empty:
-                    st.subheader(f"Sentiment Trend for \"{keyword}\":")
-                    st.line_chart(key_data.set_index('Date')['Sentiment'])
-            except Exception as e:
-                st.error(f"Failed to plot sentiment data for \"{keyword}\": {e}")
+            # Aggregate data to get the most recent sentiment score per day
+            aggregated_data = st.session_state.historical_data
+            aggregated_data['Date'] = pd.to_datetime(aggregated_data['Date']).dt.date
+            aggregated_data = (aggregated_data.sort_values(by='Date')
+                               .groupby(['Date', 'Keyword'], as_index=False)
+                               .last())
+
+            # Filter data for the current keyword
+            key_data = aggregated_data[aggregated_data['Keyword'] == keyword]
+            if not key_data.empty:
+                st.subheader(f"Sentiment Trend for \"{keyword}\":")
+                
+                # Create a line chart with points using Altair
+                line = alt.Chart(key_data).mark_line(point=True).encode(
+                    x=alt.X('Date:T', axis=alt.Axis(title='Date')),
+                    y=alt.Y('Sentiment:Q', axis=alt.Axis(title='Sentiment Score')),
+                    tooltip=['Date:T', 'Sentiment:Q']
+                ).properties(
+                    width=700,
+                    height=400
+                ).interactive()
+
+                st.altair_chart(line)
 
     if st.button("Update All Data to S3"):
         st.write("Attempting to save all data to S3...")
