@@ -105,7 +105,7 @@ def fetch_news(keyword):
         st.error(f"Failed to fetch news for {keyword}: {e}")
         return []
 
-def upload_csv_to_s3(df, bucket, object_key):
+def load_historical_data(bucket, object_key):
     s3 = boto3.client(
         's3',
         aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
@@ -113,26 +113,33 @@ def upload_csv_to_s3(df, bucket, object_key):
     )
     try:
         response = s3.get_object(Bucket=bucket, Key=object_key)
-        existing_data = pd.read_csv(response['Body'])
-        st.write("Existing data loaded from S3 for appending.")
-        combined_data = pd.concat([existing_data, df], ignore_index=True)
+        historical_data = pd.read_csv(response['Body'])
+        return historical_data
     except Exception as e:
-        st.write(f"Could not load existing data from S3, assuming new file. Error: {e}")
-        combined_data = df
+        st.write(f"Could not load historical data from S3. Error: {e}")
+        # Return an empty DataFrame if there is no existing data
+        return pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
 
-    csv_buffer = StringIO()
-    combined_data.to_csv(csv_buffer, index=False)
-    csv_buffer.seek(0)
-    s3.put_object(Bucket=bucket, Key=object_key, Body=csv_buffer.getvalue())
-    st.write(f"Data appended and uploaded to S3 bucket `{bucket}` at `{object_key}`.")
+def upload_csv_to_s3(df, bucket, object_key):
+    s3 = boto3.client(
+        's3',
+        aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
+        aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
+    )
+    try:
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False)
+        csv_buffer.seek(0)
+        s3.put_object(Bucket=bucket, Key=object_key, Body=csv_buffer.getvalue())
+        st.write(f"Data uploaded to S3 bucket `{bucket}` at `{object_key}`.")
+    except Exception as e:
+        st.error(f"Failed to upload data to S3: {e}")
 
 def main():
     st.title("News Feed Analyzer")
 
-    if 'historical_data' not in st.session_state:
-        st.session_state.historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
-    if 'last_successful_data' not in st.session_state:
-        st.session_state.last_successful_data = {}
+    # Load historical data from S3
+    historical_data = load_historical_data(st.secrets["aws"]["bucket_name"], st.secrets["aws"]["object_key"])
 
     for keyword in KEYWORDS:
         st.header(f"Keyword: {keyword}")
@@ -177,40 +184,35 @@ def main():
                 "Sentiment": [sentiment_score]
             })
 
-            st.table(update_df)
-
             st.session_state.historical_data = pd.concat([st.session_state.historical_data, update_df])
 
-            # Aggregate data to get the most recent sentiment score per day
-            aggregated_data = st.session_state.historical_data
-            aggregated_data['Date'] = pd.to_datetime(aggregated_data['Date']).dt.date
-            aggregated_data = (aggregated_data.sort_values(by='Date')
-                               .groupby(['Date', 'Keyword'], as_index=False)
-                               .last())
+    # Combine historical data with current session data
+    combined_data = pd.concat([historical_data, st.session_state.historical_data])
+    combined_data['Date'] = pd.to_datetime(combined_data['Date']).dt.date
+    combined_data = (combined_data.sort_values(by='Date')
+                     .groupby(['Date', 'Keyword'], as_index=False)
+                     .last())
 
-            # Filter data for the current keyword
-            key_data = aggregated_data[aggregated_data['Keyword'] == keyword]
-            if not key_data.empty:
-                st.subheader(f"Sentiment Trend for \"{keyword}\":")
-                
-                # Create a line chart with points using Altair
-                line = alt.Chart(key_data).mark_line(point=True).encode(
-                    x=alt.X('Date:T', axis=alt.Axis(title='Date')),
-                    y=alt.Y('Sentiment:Q', axis=alt.Axis(title='Sentiment Score')),
-                    tooltip=['Date:T', 'Sentiment:Q']
-                ).properties(
-                    width=700,
-                    height=400
-                ).interactive()
+    for keyword in KEYWORDS:
+        key_data = combined_data[combined_data['Keyword'] == keyword]
+        if not key_data.empty:
+            st.subheader(f"Sentiment Trend for \"{keyword}\":")
+            
+            # Create a line chart with points using Altair
+            line = alt.Chart(key_data).mark_line(point=True).encode(
+                x=alt.X('Date:T', axis=alt.Axis(title='Date')),
+                y=alt.Y('Sentiment:Q', axis=alt.Axis(title='Sentiment Score')),
+                tooltip=['Date:T', 'Sentiment:Q']
+            ).properties(
+                width=700,
+                height=400
+            ).interactive()
 
-                st.altair_chart(line)
+            st.altair_chart(line)
 
+    # Update S3 with combined data after processing all keywords
     if st.button("Update All Data to S3"):
-        st.write("Attempting to save all data to S3...")
-        if not st.session_state.historical_data.empty:
-            upload_csv_to_s3(st.session_state.historical_data, st.secrets["aws"]["bucket_name"], st.secrets["aws"]["object_key"])
-        else:
-            st.write("No data to save.")
+        upload_csv_to_s3(combined_data, st.secrets["aws"]["bucket_name"], st.secrets["aws"]["object_key"])
 
 if __name__ == "__main__":
     main()
