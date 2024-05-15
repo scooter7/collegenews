@@ -10,13 +10,11 @@ from datetime import datetime
 from collections import Counter
 from io import StringIO
 
-# Ensure necessary NLTK resources
 nltk.download("punkt", quiet=True)
 nltk.download("vader_lexicon", quiet=True)
 nltk.download("stopwords", quiet=True)
 from nltk.corpus import stopwords
 
-# Predefined keywords for analysis, with phrases wrapped in quotes
 KEYWORDS = ['"Columbia University"', '"Yale University"', '"Brown University"',
             '"Cornell University"', '"Princeton University"', '"Harvard University"']
 
@@ -87,27 +85,33 @@ def analyze_sentiment(text):
     sentiment_score = sentiment['compound'] * 100
     return sentiment_score
 
-for keyword in KEYWORDS:
-    st.header(f"Keyword: {keyword}")
-    results = fetch_news(keyword)
-
-    if not results or 'data' not in results or not results['data']:  # Check if the response has articles
-        st.error(f"No results found for {keyword}.")
-        continue
-
-    news_text = ""
-    for article in results['data']:
-        title = article.get('title', "No Title")
-        description = article.get('text', "No description available")
-        url = article.get('url', "#")
-        news_text += f"{description} "
-        st.markdown(f"#### [{title}]({url})")
-        st.markdown(f"*{description}*")
-        st.markdown("---")
-
-    if news_text:
-        # Your existing logic to process and display the news text
-        ...
+def fetch_news(query):
+    ENDPOINT = 'https://webz.io/news/search'
+    headers = {
+        'x-api-key': st.secrets["webzio"]["api_key"]
+    }
+    params = {
+        'q': query,
+        'language': 'en',
+        'size': 10,
+        'sort': 'crawled:desc'
+    }
+    try:
+        response = requests.get(ENDPOINT, headers=headers, params=params)
+        if response.status_code == 429:
+            st.warning("API call limit exceeded. Using cached data.")
+            return []
+        elif response.status_code != 200:
+            st.error(f"Failed to fetch news: HTTP Status Code {response.status_code}")
+            return []
+        data = response.json()
+        if 'articles' not in data:
+            st.error("Error in response format, missing 'articles'.")
+            return []
+        return data['articles']
+    except Exception as e:
+        st.error(f"Failed to fetch news: {e}")
+        return []
 
 def upload_csv_to_s3(df, bucket, object_key):
     s3 = boto3.client(
@@ -139,81 +143,61 @@ def main():
         st.session_state.last_successful_data = {}
 
     for keyword in KEYWORDS:
-        st.header(f"Keyword: {keyword}")
-        results = fetch_news(keyword)
+        st.header(f"Keyword: {keyword.strip('"')}")
+        articles = fetch_news(keyword)
 
-        if not results:  # If the API limit is exceeded or error in fetching
-            if keyword in st.session_state.last_successful_data:
-                st.info(f"No new data due to API limits. Showing cached results for {keyword}.")
-                results = st.session_state.last_successful_data[keyword]
-            else:
-                st.error(f"No results found and no cache available for {keyword}.")
-                continue
-        
+        if not articles:
+            st.error(f"No results found for {keyword}.")
+            continue
+
         news_text = ""
-        if results.get("status") == "ok" and results.get("articles"):
-            # Cache the successful fetch
-            st.session_state.last_successful_data[keyword] = results
+        for article in articles:
+            title = article.get('title', "No Title")
+            description = article.get('text', "No description available")
+            url = article.get('url', "#")
+            news_text += f"{description} "
+            st.markdown(f"#### [{title}]({url})")
+            st.markdown(f"*{description}*")
+            st.markdown("---")
+
+        if news_text:
+            st.write("Aggregate Word Cloud:")
+            plot_wordcloud(nltk.word_tokenize(news_text.lower()))
+
+            sentiment_score = analyze_sentiment(news_text)
+            st.write("Aggregate Sentiment:")
+            render_sentiment_gauge(sentiment_score)
+
+            nltk_stopwords = set(stopwords.words('english'))
+            custom_stopwords = get_custom_stopwords("https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt")
+            all_stopwords = nltk_stopwords.union(custom_stopwords)
+
+            words = nltk.word_tokenize(news_text.lower())
+            filtered_words = [word for word in words if word.isalpha() and word not in all_stopwords]
             
-            for article in results["articles"]:
-                title = article['title']
-                description = article['description'] or "No description available"
-                url = article['url']
-                news_text += f"{description} "
-                st.markdown(f"#### [{title}]({url})")
-                st.markdown(f"*{description}*")
-                st.markdown("---")
+            most_common_words = Counter(filtered_words).most_common(5)
+            top_words = ', '.join(word for word, count in most_common_words)
 
-            if news_text:
-                # Word Cloud
-                st.write("Aggregate Word Cloud:")
-                plot_wordcloud(nltk.word_tokenize(news_text.lower()))
+            update_df = pd.DataFrame({
+                "Date": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+                "Keyword": [keyword.strip('"')],
+                "Topics": [top_words],
+                "Sentiment": [sentiment_score]
+            })
 
-                # Sentiment Analysis
-                sentiment_score = analyze_sentiment(news_text)
-                st.write("Aggregate Sentiment:")
-                render_sentiment_gauge(sentiment_score)
+            st.table(update_df)
 
-                # Process text for topics
-                nltk_stopwords = set(stopwords.words('english'))
-                custom_stopwords = get_custom_stopwords("https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt")
-                all_stopwords = nltk_stopwords.union(custom_stopwords)
+            st.session_state.historical_data = pd.concat([st.session_state.historical_data, update_df])
 
-                words = nltk.word_tokenize(news_text.lower())
-                filtered_words = [word for word in words if word.isalpha() and word not in all_stopwords]
-                
-                most_common_words = Counter(filtered_words).most_common(5)
-                top_words = ', '.join(word for word, count in most_common_words)
-
-                update_df = pd.DataFrame({
-                    "Date": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-                    "Keyword": [keyword],
-                    "Topics": [top_words],
-                    "Sentiment": [sentiment_score]
-                })
-
-                st.table(update_df)
-
-                # Append new data to session state
-                st.session_state.historical_data = pd.concat([st.session_state.historical_data, update_df])
-
-                # Sentiment Trend Analysis for the current keyword
-                try:
-                    plot_data = st.session_state.historical_data.copy()
-                    plot_data['Date'] = pd.to_datetime(plot_data['Date'])
-                    key_data = plot_data[plot_data['Keyword'] == keyword]
-                    if not key_data.empty:
-                        st.subheader(f"Sentiment Trend for '{keyword}':")
-                        st.line_chart(key_data.set_index('Date')['Sentiment'])
-                except Exception as e:
-                    st.error(f"Failed to plot sentiment data for '{keyword}': {e}")
-        else:
-            st.info(f"No results found for {keyword}. Using cached data if available.")
-            if keyword in st.session_state.last_successful_data:
-                st.info(f"Displaying cached results for {keyword}.")
-                # You can add display logic for cached data here if needed
-            else:
-                st.error("No cached data available.")
+            try:
+                plot_data = st.session_state.historical_data.copy()
+                plot_data['Date'] = pd.to_datetime(plot_data['Date'])
+                key_data = plot_data[plot_data['Keyword'] == keyword.strip('"')]
+                if not key_data.empty:
+                    st.subheader(f"Sentiment Trend for '{keyword.strip('"')}':")
+                    st.line_chart(key_data.set_index('Date')['Sentiment'])
+            except Exception as e:
+                st.error(f"Failed to plot sentiment data for '{keyword.strip('"')}': {e}")
 
     if st.button("Update All Data to S3"):
         st.write("Attempting to save all data to S3...")
