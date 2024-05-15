@@ -87,19 +87,27 @@ def analyze_sentiment(text):
     sentiment_score = sentiment['compound'] * 100
     return sentiment_score
 
-def fetch_news(query):
-    ENDPOINT = 'https://newsapi.org/v2/everything'
-    params = {
-        'q': query,
-        'apiKey': st.secrets["newsapi"]["api_key"],
-        'pageSize': 10,
-        'sortBy': 'publishedAt'
-    }
-    response = requests.get(ENDPOINT, params=params)
-    if response.status_code == 429:  # Check if the API limit has been exceeded
-        st.warning("API call limit exceeded. Using cached data.")
-        return {}
-    return response.json()
+for keyword in KEYWORDS:
+    st.header(f"Keyword: {keyword}")
+    results = fetch_news(keyword)
+
+    if not results or 'data' not in results or not results['data']:  # Check if the response has articles
+        st.error(f"No results found for {keyword}.")
+        continue
+
+    news_text = ""
+    for article in results['data']:
+        title = article.get('title', "No Title")
+        description = article.get('text', "No description available")
+        url = article.get('url', "#")
+        news_text += f"{description} "
+        st.markdown(f"#### [{title}]({url})")
+        st.markdown(f"*{description}*")
+        st.markdown("---")
+
+    if news_text:
+        # Your existing logic to process and display the news text
+        ...
 
 def upload_csv_to_s3(df, bucket, object_key):
     s3 = boto3.client(
