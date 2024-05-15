@@ -126,7 +126,7 @@ def upload_csv_to_s3(df, bucket, object_key):
         aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
         aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
     )
-    try {
+    try :
         csv_buffer = StringIO()
         df.to_csv(csv_buffer, index=False)
         csv_buffer.seek(0)
