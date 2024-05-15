@@ -7,3 +7,4 @@ Pillow  # Dependency for wordcloud
 streamlit-echarts
 pandas
 boto3
+GoogleNews
