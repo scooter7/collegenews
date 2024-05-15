@@ -117,7 +117,6 @@ def load_historical_data(bucket, object_key):
         return historical_data
     except Exception as e:
         st.write(f"Could not load historical data from S3. Error: {e}")
-        # Return an empty DataFrame if there is no existing data
         return pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
 
 def upload_csv_to_s3(df, bucket, object_key):
@@ -139,7 +138,8 @@ def main():
     st.title("News Feed Analyzer")
 
     # Load historical data from S3
-    historical_data = load_historical_data(st.secrets["aws"]["bucket_name"], st.secrets["aws"]["object_key"])
+    if 'historical_data' not in st.session_state:
+        st.session_state.historical_data = load_historical_data(st.secrets["aws"]["bucket_name"], st.secrets["aws"]["object_key"])
 
     for keyword in KEYWORDS:
         st.header(f"Keyword: {keyword}")
@@ -184,10 +184,11 @@ def main():
                 "Sentiment": [sentiment_score]
             })
 
+            # Append new data to the session state historical data
             st.session_state.historical_data = pd.concat([st.session_state.historical_data, update_df])
 
-    # Combine historical data with current session data
-    combined_data = pd.concat([historical_data, st.session_state.historical_data])
+    # Combine session state historical data with new data
+    combined_data = st.session_state.historical_data
     combined_data['Date'] = pd.to_datetime(combined_data['Date']).dt.date
     combined_data = (combined_data.sort_values(by='Date')
                      .groupby(['Date', 'Keyword'], as_index=False)
