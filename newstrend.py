@@ -10,6 +10,7 @@ from datetime import datetime
 from collections import Counter
 from io import StringIO
 from GoogleNews import GoogleNews
+import altair as alt
 
 # Download necessary NLTK data and models
 nltk.download("punkt", quiet=True)
@@ -191,8 +192,18 @@ def main():
             key_data = aggregated_data[aggregated_data['Keyword'] == keyword]
             if not key_data.empty:
                 st.subheader(f"Sentiment Trend for \"{keyword}\":")
-                # Plot the trend line with dates on the x-axis and sentiment scores on the y-axis
-                st.line_chart(key_data.set_index('Date')['Sentiment'])
+                
+                # Create a line chart with points using Altair
+                line = alt.Chart(key_data).mark_line(point=True).encode(
+                    x=alt.X('Date:T', axis=alt.Axis(title='Date')),
+                    y=alt.Y('Sentiment:Q', axis=alt.Axis(title='Sentiment Score')),
+                    tooltip=['Date:T', 'Sentiment:Q']
+                ).properties(
+                    width=700,
+                    height=400
+                ).interactive()
+
+                st.altair_chart(line)
 
     if st.button("Update All Data to S3"):
         st.write("Attempting to save all data to S3...")
