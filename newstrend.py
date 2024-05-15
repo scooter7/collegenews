@@ -9,14 +9,20 @@ import boto3
 from datetime import datetime
 from collections import Counter
 from io import StringIO
+from GoogleNews import GoogleNews
 
+# Download necessary NLTK data and models
 nltk.download("punkt", quiet=True)
 nltk.download("vader_lexicon", quiet=True)
 nltk.download("stopwords", quiet=True)
 from nltk.corpus import stopwords
 
-KEYWORDS = ['"Columbia University"', '"Yale University"', '"Brown University"',
-            '"Cornell University"', '"Princeton University"', '"Harvard University"']
+# Initialize GoogleNews
+googlenews = GoogleNews()
+
+# Keywords for analysis
+KEYWORDS = ['Columbia University', 'Yale University', 'Brown University',
+            'Cornell University', 'Princeton University', 'Harvard University']
 
 def get_custom_stopwords(url):
     try:
@@ -85,32 +91,17 @@ def analyze_sentiment(text):
     sentiment_score = sentiment['compound'] * 100
     return sentiment_score
 
-def fetch_news(query):
-    ENDPOINT = 'https://webz.io/news/search'
-    headers = {
-        'x-api-key': st.secrets["webzio"]["api_key"]
-    }
-    params = {
-        'q': query,
-        'language': 'en',
-        'size': 10,
-        'sort': 'crawled:desc'
-    }
+def fetch_news(keyword):
     try:
-        response = requests.get(ENDPOINT, headers=headers, params=params)
-        if response.status_code == 429:
-            st.warning("API call limit exceeded. Using cached data.")
+        googlenews.clear()
+        googlenews.search(keyword)
+        result = googlenews.result()
+        if not result:
+            st.error(f"No results found for {keyword}.")
             return []
-        elif response.status_code != 200:
-            st.error(f"Failed to fetch news: HTTP Status Code {response.status_code}")
-            return []
-        data = response.json()
-        if 'articles' not in data:
-            st.error("Error in response format, missing 'articles'.")
-            return []
-        return data['articles']
+        return result
     except Exception as e:
-        st.error(f"Failed to fetch news: {e}")
+        st.error(f"Failed to fetch news for {keyword}: {e}")
         return []
 
 def upload_csv_to_s3(df, bucket, object_key):
@@ -143,8 +134,7 @@ def main():
         st.session_state.last_successful_data = {}
 
     for keyword in KEYWORDS:
-        clean_keyword = keyword.strip('"')
-        st.header(f"Keyword: {clean_keyword}")
+        st.header(f"Keyword: {keyword}")
         articles = fetch_news(keyword)
 
         if not articles:
@@ -153,10 +143,10 @@ def main():
 
         news_text = ""
         for article in articles:
-            title = article.get('title', "No Title")
-            description = article.get('text', "No description available")
-            url = article.get('url', "#")
-            news_text += f"{description} "
+            title = article['title']
+            description = article['desc']
+            url = article['link']
+            news_text += f"{title} {description} "
             st.markdown(f"#### [{title}]({url})")
             st.markdown(f"*{description}*")
             st.markdown("---")
@@ -181,7 +171,7 @@ def main():
 
             update_df = pd.DataFrame({
                 "Date": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-                "Keyword": [clean_keyword],
+                "Keyword": [keyword],
                 "Topics": [top_words],
                 "Sentiment": [sentiment_score]
             })
@@ -193,12 +183,12 @@ def main():
             try:
                 plot_data = st.session_state.historical_data.copy()
                 plot_data['Date'] = pd.to_datetime(plot_data['Date'])
-                key_data = plot_data[plot_data['Keyword'] == clean_keyword]
+                key_data = plot_data[plot_data['Keyword'] == keyword]
                 if not key_data.empty:
-                    st.subheader(f"Sentiment Trend for \"{clean_keyword}\":")
+                    st.subheader(f"Sentiment Trend for \"{keyword}\":")
                     st.line_chart(key_data.set_index('Date')['Sentiment'])
             except Exception as e:
-                st.error(f"Failed to plot sentiment data for \"{clean_keyword}\": {e}")
+                st.error(f"Failed to plot sentiment data for \"{keyword}\": {e}")
 
     if st.button("Update All Data to S3"):
         st.write("Attempting to save all data to S3...")
