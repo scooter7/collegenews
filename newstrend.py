@@ -194,10 +194,10 @@ def main():
                 plot_data['Date'] = pd.to_datetime(plot_data['Date'])
                 key_data = plot_data[plot_data['Keyword'] == keyword.strip('"')]
                 if not key_data.empty:
-                    st.subheader(f"Sentiment Trend for '{keyword.strip('"')}':")
+                    st.subheader(f"Sentiment Trend for \"{keyword.strip('\"')}\":")
                     st.line_chart(key_data.set_index('Date')['Sentiment'])
             except Exception as e:
-                st.error(f"Failed to plot sentiment data for '{keyword.strip('"')}': {e}")
+                st.error(f"Failed to plot sentiment data for \"{keyword.strip('\"')}\": {e}")
 
     if st.button("Update All Data to S3"):
         st.write("Attempting to save all data to S3...")
