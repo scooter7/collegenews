@@ -9,16 +9,20 @@ import boto3
 from datetime import datetime
 from collections import Counter
 from io import StringIO
+from GoogleNews import GoogleNews
 
-# Ensure necessary NLTK resources
+# Download necessary NLTK data and models
 nltk.download("punkt", quiet=True)
 nltk.download("vader_lexicon", quiet=True)
 nltk.download("stopwords", quiet=True)
 from nltk.corpus import stopwords
 
-# Predefined keywords for analysis, with phrases wrapped in quotes
-KEYWORDS = ['"Columbia University"', '"Yale University"', '"Brown University"', 
-            '"Cornell University"', '"Princeton University"', '"Harvard University"']
+# Initialize GoogleNews
+googlenews = GoogleNews()
+
+# Keywords for analysis
+KEYWORDS = ['Columbia University', 'Yale University', 'Brown University',
+            'Cornell University', 'Princeton University', 'Harvard University']
 
 def get_custom_stopwords(url):
     try:
@@ -57,10 +61,10 @@ def render_sentiment_gauge(score):
                     "lineStyle": {
                         "width": 15,
                         "color": [
-                            [0.33, '#FF4500'], 
-                            [0.5, '#FFD93D'],    
-                            [0.67, '#FFD93D'],   
-                            [1, '#6DD400']       
+                            [0.33, '#FF4500'],
+                            [0.5, '#FFD93D'],
+                            [0.67, '#FFD93D'],
+                            [1, '#6DD400']
                         ]
                     }
                 },
@@ -87,16 +91,18 @@ def analyze_sentiment(text):
     sentiment_score = sentiment['compound'] * 100
     return sentiment_score
 
-def fetch_news(query):
-    ENDPOINT = 'https://newsapi.org/v2/everything'
-    params = {
-        'q': query,
-        'apiKey': st.secrets["newsapi"]["api_key"],
-        'pageSize': 10,
-        'sortBy': 'publishedAt'  # Ensures the most recent news are fetched
-    }
-    response = requests.get(ENDPOINT, params=params)
-    return response.json()
+def fetch_news(keyword):
+    try:
+        googlenews.clear()
+        googlenews.search(keyword)
+        result = googlenews.result()
+        if not result:
+            st.error(f"No results found for {keyword}.")
+            return []
+        return result
+    except Exception as e:
+        st.error(f"Failed to fetch news for {keyword}: {e}")
+        return []
 
 def upload_csv_to_s3(df, bucket, object_key):
     s3 = boto3.client(
@@ -124,66 +130,65 @@ def main():
 
     if 'historical_data' not in st.session_state:
         st.session_state.historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
+    if 'last_successful_data' not in st.session_state:
+        st.session_state.last_successful_data = {}
 
     for keyword in KEYWORDS:
         st.header(f"Keyword: {keyword}")
-        results = fetch_news(keyword)
+        articles = fetch_news(keyword)
+
+        if not articles:
+            st.error(f"No results found for {keyword}.")
+            continue
+
         news_text = ""
-        if results.get("articles"):
-            for article in results["articles"]:
-                title = article['title']
-                description = article['description'] or "No description available"
-                url = article['url']
-                news_text += f"{description} "
-                st.markdown(f"#### [{title}]({url})")
-                st.markdown(f"*{description}*")
-                st.markdown("---")
+        for article in articles:
+            title = article['title']
+            description = article['desc']
+            url = article['link']
+            news_text += f"{title} {description} "
+            st.markdown(f"#### [{title}]({url})")
+            st.markdown(f"*{description}*")
+            st.markdown("---")
 
-            if news_text:
-                # Word Cloud
-                st.write("Aggregate Word Cloud:")
-                plot_wordcloud(nltk.word_tokenize(news_text.lower()))
+        if news_text:
+            st.write("Aggregate Word Cloud:")
+            plot_wordcloud(nltk.word_tokenize(news_text.lower()))
 
-                # Sentiment Analysis
-                sentiment_score = analyze_sentiment(news_text)
-                st.write("Aggregate Sentiment:")
-                render_sentiment_gauge(sentiment_score)
+            sentiment_score = analyze_sentiment(news_text)
+            st.write("Aggregate Sentiment:")
+            render_sentiment_gauge(sentiment_score)
 
-                # Process text for topics
-                nltk_stopwords = set(stopwords.words('english'))
-                custom_stopwords = get_custom_stopwords("https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt")
-                all_stopwords = nltk_stopwords.union(custom_stopwords)
+            nltk_stopwords = set(stopwords.words('english'))
+            custom_stopwords = get_custom_stopwords("https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt")
+            all_stopwords = nltk_stopwords.union(custom_stopwords)
 
-                words = nltk.word_tokenize(news_text.lower())
-                filtered_words = [word for word in words if word.isalpha() and word not in all_stopwords]
-                
-                most_common_words = Counter(filtered_words).most_common(5)
-                top_words = ', '.join(word for word, count in most_common_words)
+            words = nltk.word_tokenize(news_text.lower())
+            filtered_words = [word for word in words if word.isalpha() and word not in all_stopwords]
+            
+            most_common_words = Counter(filtered_words).most_common(5)
+            top_words = ', '.join(word for word, count in most_common_words)
 
-                update_df = pd.DataFrame({
-                    "Date": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-                    "Keyword": [keyword],
-                    "Topics": [top_words],
-                    "Sentiment": [sentiment_score]
-                })
+            update_df = pd.DataFrame({
+                "Date": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+                "Keyword": [keyword],
+                "Topics": [top_words],
+                "Sentiment": [sentiment_score]
+            })
 
-                st.table(update_df)
+            st.table(update_df)
 
-                # Append new data to session state
-                st.session_state.historical_data = pd.concat([st.session_state.historical_data, update_df])
+            st.session_state.historical_data = pd.concat([st.session_state.historical_data, update_df])
 
-                # Sentiment Trend Analysis for the current keyword
-                try:
-                    plot_data = st.session_state.historical_data.copy()
-                    plot_data['Date'] = pd.to_datetime(plot_data['Date'])
-                    key_data = plot_data[plot_data['Keyword'] == keyword]
-                    if not key_data.empty:
-                        st.subheader(f"Sentiment Trend for '{keyword}':")
-                        st.line_chart(key_data.set_index('Date')['Sentiment'])
-                except Exception as e:
-                    st.error(f"Failed to plot sentiment data for '{keyword}': {e}")
-        else:
-            st.write("No results found for this keyword.")
+            try:
+                plot_data = st.session_state.historical_data.copy()
+                plot_data['Date'] = pd.to_datetime(plot_data['Date'])
+                key_data = plot_data[plot_data['Keyword'] == keyword]
+                if not key_data.empty:
+                    st.subheader(f"Sentiment Trend for \"{keyword}\":")
+                    st.line_chart(key_data.set_index('Date')['Sentiment'])
+            except Exception as e:
+                st.error(f"Failed to plot sentiment data for \"{keyword}\": {e}")
 
     if st.button("Update All Data to S3"):
         st.write("Attempting to save all data to S3...")
