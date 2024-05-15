@@ -143,7 +143,8 @@ def main():
         st.session_state.last_successful_data = {}
 
     for keyword in KEYWORDS:
-        st.header(f"Keyword: {keyword.strip('\"')}")
+        clean_keyword = keyword.strip('"')
+        st.header(f"Keyword: {clean_keyword}")
         articles = fetch_news(keyword)
 
         if not articles:
@@ -180,7 +181,7 @@ def main():
 
             update_df = pd.DataFrame({
                 "Date": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-                "Keyword": [keyword.strip('"')],
+                "Keyword": [clean_keyword],
                 "Topics": [top_words],
                 "Sentiment": [sentiment_score]
             })
@@ -192,12 +193,12 @@ def main():
             try:
                 plot_data = st.session_state.historical_data.copy()
                 plot_data['Date'] = pd.to_datetime(plot_data['Date'])
-                key_data = plot_data[plot_data['Keyword'] == keyword.strip('"')]
+                key_data = plot_data[plot_data['Keyword'] == clean_keyword]
                 if not key_data.empty:
-                    st.subheader(f"Sentiment Trend for \"{keyword.strip('\"')}\":")
+                    st.subheader(f"Sentiment Trend for \"{clean_keyword}\":")
                     st.line_chart(key_data.set_index('Date')['Sentiment'])
             except Exception as e:
-                st.error(f"Failed to plot sentiment data for \"{keyword.strip('\"')}\": {e}")
+                st.error(f"Failed to plot sentiment data for \"{clean_keyword}\": {e}")
 
     if st.button("Update All Data to S3"):
         st.write("Attempting to save all data to S3...")
