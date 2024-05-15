@@ -22,8 +22,8 @@ from nltk.corpus import stopwords
 googlenews = GoogleNews()
 
 # Keywords for analysis
-KEYWORDS = ['Columbia University', 'Yale University', 'Brown University',
-            'Cornell University', 'Princeton University', 'Harvard University']
+KEYWORDS = ['"Columbia University"', '"Yale University"', '"Brown University"',
+            '"Cornell University"', '"Princeton University"', '"Harvard University"']
 
 def get_custom_stopwords(url):
     try:
@@ -114,7 +114,6 @@ def load_historical_data(bucket, object_key):
     try:
         response = s3.get_object(Bucket=bucket, Key=object_key)
         historical_data = pd.read_csv(response['Body'])
-        # Ensure the 'Date' column is in the correct datetime format
         historical_data['Date'] = pd.to_datetime(historical_data['Date'], errors='coerce').dt.date
         return historical_data
     except Exception as e:
@@ -127,13 +126,13 @@ def upload_csv_to_s3(df, bucket, object_key):
         aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
         aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
     )
-    try:
+    try {
         csv_buffer = StringIO()
         df.to_csv(csv_buffer, index=False)
         csv_buffer.seek(0)
         s3.put_object(Bucket=bucket, Key=object_key, Body=csv_buffer.getvalue())
         st.write(f"Data uploaded to S3 bucket `{bucket}` at `{object_key}`.")
-    except Exception as e:
+    } except Exception as e:
         st.error(f"Failed to upload data to S3: {e}")
 
 def main():
@@ -143,14 +142,18 @@ def main():
     if 'historical_data' not in st.session_state:
         st.session_state.historical_data = load_historical_data(st.secrets["aws"]["bucket_name"], st.secrets["aws"]["object_key"])
 
+    combined_data = st.session_state.historical_data.copy()
+
     for keyword in KEYWORDS:
         st.header(f"Keyword: {keyword}")
+        
+        # Fetch news articles for the keyword
         articles = fetch_news(keyword)
-
         if not articles:
             st.error(f"No results found for {keyword}.")
             continue
 
+        # Display news links
         news_text = ""
         for article in articles:
             title = article['title']
@@ -161,59 +164,42 @@ def main():
             st.markdown(f"*{description}*")
             st.markdown("---")
 
+        # Generate and display word cloud
         if news_text:
             st.write("Aggregate Word Cloud:")
             plot_wordcloud(nltk.word_tokenize(news_text.lower()))
 
+            # Analyze sentiment
             sentiment_score = analyze_sentiment(news_text)
             st.write("Aggregate Sentiment:")
             render_sentiment_gauge(sentiment_score)
 
-            nltk_stopwords = set(stopwords.words('english'))
-            custom_stopwords = get_custom_stopwords("https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt")
-            all_stopwords = nltk_stopwords.union(custom_stopwords)
-
-            words = nltk.word_tokenize(news_text.lower())
-            filtered_words = [word for word in words if word.isalpha() and word not in all_stopwords]
-            
-            most_common_words = Counter(filtered_words).most_common(5)
-            top_words = ', '.join(word for word, count in most_common_words)
-
+            # Update historical data
             update_df = pd.DataFrame({
                 "Date": [datetime.now().strftime("%Y-%m-%d")],
                 "Keyword": [keyword],
-                "Topics": [top_words],
+                "Topics": [', '.join(word for word, count in Counter([word for word in nltk.word_tokenize(news_text.lower()) if word.isalpha() and word not in get_custom_stopwords("https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt")]).most_common(5))],
                 "Sentiment": [sentiment_score]
             })
 
-            # Append new data to the session state historical data
-            st.session_state.historical_data = pd.concat([st.session_state.historical_data, update_df])
+            combined_data = pd.concat([combined_data, update_df])
 
-    # Combine session state historical data with new data
-    combined_data = st.session_state.historical_data
-    combined_data['Date'] = pd.to_datetime(combined_data['Date'], errors='coerce').dt.date
-    combined_data = (combined_data.sort_values(by='Date')
-                     .groupby(['Date', 'Keyword'], as_index=False)
-                     .last())
+        # Filter and sort the data for the current keyword
+        keyword_data = combined_data[combined_data['Keyword'] == keyword]
+        keyword_data['Date'] = pd.to_datetime(keyword_data['Date'], errors='coerce').dt.date
+        keyword_data = keyword_data.sort_values('Date').groupby('Date').last().reset_index()
 
-    for keyword in KEYWORDS:
-        key_data = combined_data[combined_data['Keyword'] == keyword]
-        if not key_data.empty:
+        # Display sentiment trend chart
+        if not keyword_data.empty:
             st.subheader(f"Sentiment Trend for \"{keyword}\":")
-            
-            # Create a line chart with points using Altair
-            line = alt.Chart(key_data).mark_line(point=True).encode(
+            line_chart = alt.Chart(keyword_data).mark_line(point=True).encode(
                 x=alt.X('Date:T', axis=alt.Axis(title='Date')),
                 y=alt.Y('Sentiment:Q', axis=alt.Axis(title='Sentiment Score')),
                 tooltip=['Date:T', 'Sentiment:Q']
-            ).properties(
-                width=700,
-                height=400
-            ).interactive()
+            ).properties(width=700, height=400).interactive()
+            st.altair_chart(line_chart)
 
-            st.altair_chart(line)
-
-    # Update S3 with combined data after processing all keywords
+    # Update S3 with the combined data after processing all keywords
     if st.button("Update All Data to S3"):
         upload_csv_to_s3(combined_data, st.secrets["aws"]["bucket_name"], st.secrets["aws"]["object_key"])
 
