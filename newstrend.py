@@ -132,7 +132,7 @@ def upload_csv_to_s3(df, bucket, object_key):
         csv_buffer.seek(0)
         s3.put_object(Bucket=bucket, Key=object_key, Body=csv_buffer.getvalue())
         st.write(f"Data uploaded to S3 bucket `{bucket}` at `{object_key}`.")
-    } except Exception as e:
+    except Exception as e:
         st.error(f"Failed to upload data to S3: {e}")
 
 def main():
