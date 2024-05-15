@@ -3,13 +3,35 @@ import requests
 import nltk
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
-from streamlit_echarts import st_echarts  # Import for echarts
+from streamlit_echarts import st_echarts
+import pandas as pd
+import boto3
+from datetime import datetime
+from collections import Counter
+from io import StringIO
+from GoogleNews import GoogleNews
 
-# Function to fetch custom stopwords
+# Download necessary NLTK data and models
+nltk.download("punkt", quiet=True)
+nltk.download("vader_lexicon", quiet=True)
+nltk.download("stopwords", quiet=True)
+from nltk.corpus import stopwords
+
+# Initialize GoogleNews
+googlenews = GoogleNews()
+
+# Keywords for analysis
+KEYWORDS = ['Columbia University', 'Yale University', 'Brown University',
+            'Cornell University', 'Princeton University', 'Harvard University']
+
 def get_custom_stopwords(url):
-    response = requests.get(url)
-    stopwords = set(response.text.split())
-    return stopwords
+    try:
+        response = requests.get(url)
+        stopwords = set(response.text.split())
+        return stopwords
+    except Exception as e:
+        st.error(f"Failed to fetch custom stopwords: {e}")
+        return set()
 
 def plot_wordcloud(words):
     custom_stopwords_url = "https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt"
@@ -17,53 +39,41 @@ def plot_wordcloud(words):
     wordcloud = WordCloud(width=800, height=800,
                           background_color='white',
                           stopwords=custom_stopwords,
-                          min_font_size=10).generate(words)
+                          min_font_size=10).generate(' '.join(words))
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.imshow(wordcloud)
     ax.axis("off")
     st.pyplot(fig)
 
 def render_sentiment_gauge(score):
-    # Determine the color based on the sentiment score
     color = '#6DD400' if score > 0 else '#FFD93D' if score == 0 else '#FF4500'
-    
     option = {
         "series": [
             {
                 "type": 'gauge',
-                "startAngle": 180,  # Start angle for semi-circle
-                "endAngle": 0,      # End angle for semi-circle
-                "min": -100,        # Minimum value of the gauge
-                "max": 100,         # Maximum value of the gauge
-                "splitNumber": 4,   # Divide scale into 3 parts (negative, neutral, positive)
-                "pointer": {
-                    "show": True,   # Show pointer
-                    "length": '90%',
-                    "width": 8
-                },
+                "startAngle": 180,
+                "endAngle": 0,
+                "min": -100,
+                "max": 100,
+                "splitNumber": 4,
+                "pointer": {"show": True, "length": '90%', "width": 8},
                 "axisLine": {
                     "lineStyle": {
                         "width": 15,
                         "color": [
-                            [0.33, '#FF4500'],   # Red from -100 to -33
-                            [0.5, '#FFD93D'],    # Yellow from -33 to 0
-                            [0.67, '#FFD93D'],   # Yellow from 0 to 33
-                            [1, '#6DD400']       # Green from 33 to 100
+                            [0.33, '#FF4500'],
+                            [0.5, '#FFD93D'],
+                            [0.67, '#FFD93D'],
+                            [1, '#6DD400']
                         ]
                     }
                 },
-                "axisLabel": {
-                    "show": False
-                },
-                "axisTick": {
-                    "show": False
-                },
-                "splitLine": {
-                    "show": False
-                },
+                "axisLabel": {"show": False},
+                "axisTick": {"show": False},
+                "splitLine": {"show": False},
                 "detail": {
                     "formatter": '{value}%',
-                    "offsetCenter": [0, '80%'],  # Position of the detail (score)
+                    "offsetCenter": [0, '80%'],
                     "fontSize": 16,
                     "color": color,
                     "fontWeight": 'bold'
@@ -75,46 +85,117 @@ def render_sentiment_gauge(score):
     st_echarts(options=option, height="400px")
 
 def analyze_sentiment(text):
-    nltk.download("vader_lexicon", quiet=True)
     from nltk.sentiment.vader import SentimentIntensityAnalyzer
     sid = SentimentIntensityAnalyzer()
     sentiment = sid.polarity_scores(text)
-    sentiment_score = sentiment['compound'] * 100  # Scale to percentage for gauge
+    sentiment_score = sentiment['compound'] * 100
     return sentiment_score
 
-def fetch_news(query):
-    ENDPOINT = 'https://newsapi.org/v2/everything'
-    params = {
-        'q': query,
-        'apiKey': st.secrets["newsapi"]["api_key"],
-        'pageSize': 10,  # Retrieve the top 10 articles
-    }
-    response = requests.get(ENDPOINT, params=params)
-    return response.json()
+def fetch_news(keyword):
+    try:
+        googlenews.clear()
+        googlenews.search(keyword)
+        result = googlenews.result()
+        if not result:
+            st.error(f"No results found for {keyword}.")
+            return []
+        return result
+    except Exception as e:
+        st.error(f"Failed to fetch news for {keyword}: {e}")
+        return []
+
+def upload_csv_to_s3(df, bucket, object_key):
+    s3 = boto3.client(
+        's3',
+        aws_access_key_id=st.secrets["aws"]["aws_access_key_id"],
+        aws_secret_access_key=st.secrets["aws"]["aws_secret_access_key"]
+    )
+    try:
+        response = s3.get_object(Bucket=bucket, Key=object_key)
+        existing_data = pd.read_csv(response['Body'])
+        st.write("Existing data loaded from S3 for appending.")
+        combined_data = pd.concat([existing_data, df], ignore_index=True)
+    except Exception as e:
+        st.write(f"Could not load existing data from S3, assuming new file. Error: {e}")
+        combined_data = df
+
+    csv_buffer = StringIO()
+    combined_data.to_csv(csv_buffer, index=False)
+    csv_buffer.seek(0)
+    s3.put_object(Bucket=bucket, Key=object_key, Body=csv_buffer.getvalue())
+    st.write(f"Data appended and uploaded to S3 bucket `{bucket}` at `{object_key}`.")
 
 def main():
     st.title("News Feed Analyzer")
-    query = st.text_input("Enter news keyword to search:")
-    if st.button("Search"):
-        results = fetch_news(query)
+
+    if 'historical_data' not in st.session_state:
+        st.session_state.historical_data = pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
+    if 'last_successful_data' not in st.session_state:
+        st.session_state.last_successful_data = {}
+
+    for keyword in KEYWORDS:
+        st.header(f"Keyword: {keyword}")
+        articles = fetch_news(keyword)
+
+        if not articles:
+            st.error(f"No results found for {keyword}.")
+            continue
+
         news_text = ""
-        if results.get("articles"):
-            for article in results["articles"]:
-                title = article['title']
-                description = article['description'] or "No description available"
-                url = article['url']
-                news_text += description + " "
-                st.markdown(f"#### [{title}]({url})")
-                st.markdown(f"*{description}*")
-                st.markdown("---")
-            if news_text:
-                st.write("Aggregate Word Cloud:")
-                plot_wordcloud(news_text)
-                sentiment_score = analyze_sentiment(news_text)
-                st.write("Aggregate Sentiment:")
-                render_sentiment_gauge(sentiment_score)
+        for article in articles:
+            title = article['title']
+            description = article['desc']
+            url = article['link']
+            news_text += f"{title} {description} "
+            st.markdown(f"#### [{title}]({url})")
+            st.markdown(f"*{description}*")
+            st.markdown("---")
+
+        if news_text:
+            st.write("Aggregate Word Cloud:")
+            plot_wordcloud(nltk.word_tokenize(news_text.lower()))
+
+            sentiment_score = analyze_sentiment(news_text)
+            st.write("Aggregate Sentiment:")
+            render_sentiment_gauge(sentiment_score)
+
+            nltk_stopwords = set(stopwords.words('english'))
+            custom_stopwords = get_custom_stopwords("https://github.com/aneesha/RAKE/raw/master/SmartStoplist.txt")
+            all_stopwords = nltk_stopwords.union(custom_stopwords)
+
+            words = nltk.word_tokenize(news_text.lower())
+            filtered_words = [word for word in words if word.isalpha() and word not in all_stopwords]
+            
+            most_common_words = Counter(filtered_words).most_common(5)
+            top_words = ', '.join(word for word, count in most_common_words)
+
+            update_df = pd.DataFrame({
+                "Date": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+                "Keyword": [keyword],
+                "Topics": [top_words],
+                "Sentiment": [sentiment_score]
+            })
+
+            st.table(update_df)
+
+            st.session_state.historical_data = pd.concat([st.session_state.historical_data, update_df])
+
+            try:
+                plot_data = st.session_state.historical_data.copy()
+                plot_data['Date'] = pd.to_datetime(plot_data['Date'])
+                key_data = plot_data[plot_data['Keyword'] == keyword]
+                if not key_data.empty:
+                    st.subheader(f"Sentiment Trend for \"{keyword}\":")
+                    st.line_chart(key_data.set_index('Date')['Sentiment'])
+            except Exception as e:
+                st.error(f"Failed to plot sentiment data for \"{keyword}\": {e}")
+
+    if st.button("Update All Data to S3"):
+        st.write("Attempting to save all data to S3...")
+        if not st.session_state.historical_data.empty:
+            upload_csv_to_s3(st.session_state.historical_data, st.secrets["aws"]["bucket_name"], st.secrets["aws"]["object_key"])
         else:
-            st.write("No results found.")
+            st.write("No data to save.")
 
 if __name__ == "__main__":
     main()
