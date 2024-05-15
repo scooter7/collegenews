@@ -114,6 +114,8 @@ def load_historical_data(bucket, object_key):
     try:
         response = s3.get_object(Bucket=bucket, Key=object_key)
         historical_data = pd.read_csv(response['Body'])
+        # Ensure the 'Date' column is in the correct datetime format
+        historical_data['Date'] = pd.to_datetime(historical_data['Date'], errors='coerce').dt.date
         return historical_data
     except Exception as e:
         st.write(f"Could not load historical data from S3. Error: {e}")
@@ -189,7 +191,7 @@ def main():
 
     # Combine session state historical data with new data
     combined_data = st.session_state.historical_data
-    combined_data['Date'] = pd.to_datetime(combined_data['Date']).dt.date
+    combined_data['Date'] = pd.to_datetime(combined_data['Date'], errors='coerce').dt.date
     combined_data = (combined_data.sort_values(by='Date')
                      .groupby(['Date', 'Keyword'], as_index=False)
                      .last())
