@@ -146,7 +146,7 @@ def main():
 
 st.markdown(hide_button_css, unsafe_allow_html=True)
             
-    st.title("News Feed Analyzer")
+st.title("News Feed Analyzer")
 
     # Load historical data from S3
     if 'historical_data' not in st.session_state:
