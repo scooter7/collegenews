@@ -137,16 +137,16 @@ def upload_csv_to_s3(df, bucket, object_key):
 
 def main():
     hide_button_css = """
-            style>
+            <style>
             .st-emotion-cache-ztfqz8.ef3psqc5 {
                 display: none !important;
             }
             </style>
             """
 
-st.markdown(hide_button_css, unsafe_allow_html=True)
-            
-st.title("News Feed Analyzer")
+    st.markdown(hide_button_css, unsafe_allow_html=True)
+
+    st.title("News Feed Analyzer")
 
     # Load historical data from S3
     if 'historical_data' not in st.session_state:
@@ -156,7 +156,7 @@ st.title("News Feed Analyzer")
 
     for keyword in KEYWORDS:
         st.header(f"Keyword: {keyword}")
-        
+
         # Fetch news articles for the keyword
         articles = fetch_news(keyword)
         if not articles:
