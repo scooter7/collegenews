@@ -136,11 +136,15 @@ def upload_csv_to_s3(df, bucket, object_key):
         st.error(f"Failed to upload data to S3: {e}")
 
 def main():
-    hide_toolbar_css = """
-    <style>
-        .css-14xtw13.e8zbici0 { display: none !important; }
-    </style>
-"""
+    hide_button_css = """
+            style>
+            .st-emotion-cache-ztfqz8.ef3psqc5 {
+                display: none !important;
+            }
+            </style>
+            """
+
+st.markdown(hide_button_css, unsafe_allow_html=True)
             
     st.title("News Feed Analyzer")
 
