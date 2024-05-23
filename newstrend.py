@@ -136,6 +136,13 @@ def upload_csv_to_s3(df, bucket, object_key):
         st.error(f"Failed to upload data to S3: {e}")
 
 def main():
+    # Hide the toolbar using CSS
+    hide_toolbar_css = """
+        <style>
+            .css-14xtw13.e8zbici0 { display: none !important; }
+        </style>
+    """
+            
     st.title("News Feed Analyzer")
 
     # Load historical data from S3
