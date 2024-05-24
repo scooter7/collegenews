@@ -22,8 +22,8 @@ from nltk.corpus import stopwords
 googlenews = GoogleNews()
 
 # Keywords for analysis
-KEYWORDS = ['Columbia University', 'Yale University', 'Brown University',
-            'Cornell University', 'Princeton University', 'Harvard University']
+KEYWORDS = ['Troy University', 'University of South Alabama', 'Jacksonville State University',
+            'University of Alabama', 'Auburn University', 'Columbus State University']
 
 def get_custom_stopwords(url):
     try:
