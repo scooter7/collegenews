@@ -11,11 +11,16 @@ from collections import Counter
 from io import StringIO, BytesIO
 from GoogleNews import GoogleNews
 import altair as alt
+import os
+
+# Set NLTK data directory
+nltk_data_dir = os.path.join(os.getcwd(), 'nltk_data')
+nltk.data.path.append(nltk_data_dir)
 
 # Download necessary NLTK data and models
-nltk.download("punkt", quiet=True)
-nltk.download("vader_lexicon", quiet=True)
-nltk.download("stopwords", quiet=True)
+nltk.download("punkt", download_dir=nltk_data_dir, quiet=True)
+nltk.download("vader_lexicon", download_dir=nltk_data_dir, quiet=True)
+nltk.download("stopwords", download_dir=nltk_data_dir, quiet=True)
 from nltk.corpus import stopwords
 
 # Initialize GoogleNews
