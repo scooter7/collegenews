@@ -30,7 +30,7 @@ googlenews = GoogleNews(lang='en', region='US')
 KEYWORDS = ['Troy University', 'University of South Alabama', 'Jacksonville State University',
             'University of Alabama', 'Auburn University', 'Columbus State University']
 
-@st.experimental_memo
+@st.cache_data
 def get_custom_stopwords(url):
     try:
         response = requests.get(url)
@@ -111,7 +111,7 @@ def fetch_news(keyword):
         st.error(f"Failed to fetch news for {keyword}: {e}")
         return []
 
-@st.experimental_memo
+@st.cache_data
 def load_historical_data(bucket, object_key):
     s3 = boto3.client(
         's3',
