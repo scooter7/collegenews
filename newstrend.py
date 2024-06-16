@@ -153,6 +153,7 @@ def main():
         st.session_state.historical_data = load_historical_data(st.secrets["aws"]["bucket_name"], st.secrets["aws"]["object_key"])
 
     combined_data = st.session_state.historical_data.copy()
+    current_sentiments = []
 
     for keyword in KEYWORDS:
         st.header(f"Keyword: {keyword}")
@@ -194,6 +195,11 @@ def main():
 
             combined_data = pd.concat([combined_data, update_df])
 
+            current_sentiments.append({
+                "Keyword": keyword,
+                "Sentiment": sentiment_score
+            })
+
             # Process the data for sentiment trend chart
             keyword_data = combined_data[combined_data['Keyword'] == keyword].copy()
             keyword_data['Date'] = pd.to_datetime(keyword_data['Date'], errors='coerce').dt.date
@@ -203,16 +209,33 @@ def main():
             # Display sentiment trend chart
             if not keyword_data.empty:
                 st.subheader(f"Sentiment Trend for \"{keyword}\":")
-                line_chart = alt.Chart(keyword_data).mark_line(point=True).encode(
+                point_chart = alt.Chart(keyword_data).mark_point().encode(
                     x=alt.X('Date:T', axis=alt.Axis(title='Date')),
                     y=alt.Y('Sentiment:Q', axis=alt.Axis(title='Sentiment Score')),
                     tooltip=['Date:T', 'Sentiment:Q']
                 ).properties(width=700, height=400).interactive()
-                st.altair_chart(line_chart)
+                st.altair_chart(point_chart)
 
     # Update S3 with the combined data after processing all keywords
     if st.button("Update All Data to S3"):
         upload_csv_to_s3(combined_data, st.secrets["aws"]["bucket_name"], st.secrets["aws"]["object_key"])
+
+    # Display current sentiment table
+    if current_sentiments:
+        st.subheader("Current Sentiment of Each School")
+        sentiment_df = pd.DataFrame(current_sentiments)
+        st.dataframe(sentiment_df)
+
+        # Download button for sentiment table
+        csv_buffer = StringIO()
+        sentiment_df.to_csv(csv_buffer, index=False)
+        csv_buffer.seek(0)
+        st.download_button(
+            label="Download Sentiment Data as CSV",
+            data=csv_buffer,
+            file_name='current_sentiments.csv',
+            mime='text/csv'
+        )
 
 if __name__ == "__main__":
     main()
