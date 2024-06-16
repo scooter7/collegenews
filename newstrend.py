@@ -24,7 +24,7 @@ nltk.download("stopwords", download_dir=nltk_data_dir, quiet=True)
 from nltk.corpus import stopwords
 
 # Initialize GoogleNews
-googlenews = GoogleNews()
+googlenews = GoogleNews(lang='en', region='US')
 
 # Keywords for analysis
 KEYWORDS = ['Troy University', 'University of South Alabama', 'Jacksonville State University',
