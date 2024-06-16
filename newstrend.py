@@ -8,7 +8,7 @@ import pandas as pd
 import boto3
 from datetime import datetime
 from collections import Counter
-from io import StringIO
+from io import StringIO, BytesIO
 from GoogleNews import GoogleNews
 import altair as alt
 
@@ -83,7 +83,7 @@ def render_sentiment_gauge(score):
             }
         ]
     }
-    st_echarts(options=option, height="400px")
+    st_echarts(option=option, height="400px")
 
 def analyze_sentiment(text):
     from nltk.sentiment.vader import SentimentIntensityAnalyzer
@@ -204,7 +204,7 @@ def main():
             keyword_data = combined_data[combined_data['Keyword'] == keyword].copy()
             keyword_data['Date'] = pd.to_datetime(keyword_data['Date'], errors='coerce').dt.date
             keyword_data = keyword_data.dropna(subset=['Date'])
-            keyword_data = keyword_data.sort_values('Date').groupby('Date').last().reset_index()
+            keyword_data = keyword_data.sort_values('Date')
 
             # Display sentiment trend chart
             if not keyword_data.empty:
@@ -220,14 +220,25 @@ def main():
     if st.button("Update All Data to S3"):
         upload_csv_to_s3(combined_data, st.secrets["aws"]["bucket_name"], st.secrets["aws"]["object_key"])
 
-    # Display current sentiment table
+    # Display current sentiment column chart
     if current_sentiments:
         st.subheader("Current Sentiment of Each School")
         sentiment_df = pd.DataFrame(current_sentiments)
-        st.dataframe(sentiment_df)
+        
+        column_chart = alt.Chart(sentiment_df).mark_bar().encode(
+            x=alt.X('Keyword', sort=None, axis=alt.Axis(title='School')),
+            y=alt.Y('Sentiment', axis=alt.Axis(title='Sentiment Score')),
+            color=alt.condition(
+                alt.datum.Sentiment > 0,  # Positive sentiment
+                alt.value('#6DD400'),
+                alt.value('#FF4500')  # Negative sentiment
+            ),
+            tooltip=['Keyword', 'Sentiment']
+        ).properties(width=700, height=400).interactive()
+        st.altair_chart(column_chart)
 
         # Download button for sentiment table
-        csv_buffer = StringIO()
+        csv_buffer = BytesIO()
         sentiment_df.to_csv(csv_buffer, index=False)
         csv_buffer.seek(0)
         st.download_button(
