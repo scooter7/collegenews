@@ -103,6 +103,7 @@ def fetch_news(keyword):
         googlenews.clear()
         googlenews.search(keyword)
         result = googlenews.result()
+        st.write(f"Results for {keyword}: {result}")  # Debug statement to display results
         if not result:
             st.error(f"No results found for {keyword}.")
             return []
