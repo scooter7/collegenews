@@ -30,7 +30,6 @@ googlenews = GoogleNews()
 KEYWORDS = ['Troy University', 'University of South Alabama', 'Jacksonville State University',
             'University of Alabama', 'Auburn University', 'Columbus State University']
 
-@st.cache_data
 def get_custom_stopwords(url):
     try:
         response = requests.get(url)
@@ -111,7 +110,6 @@ def fetch_news(keyword):
         st.error(f"Failed to fetch news for {keyword}: {e}")
         return []
 
-@st.cache_data
 def load_historical_data(bucket, object_key):
     s3 = boto3.client(
         's3',
@@ -156,8 +154,10 @@ def main():
     st.title("News Feed Analyzer")
 
     # Load historical data from S3
-    historical_data = load_historical_data(st.secrets["aws"]["bucket_name"], st.secrets["aws"]["object_key"])
-    combined_data = historical_data.copy()
+    if 'historical_data' not in st.session_state:
+        st.session_state.historical_data = load_historical_data(st.secrets["aws"]["bucket_name"], st.secrets["aws"]["object_key"])
+
+    combined_data = st.session_state.historical_data.copy()
     current_sentiments = []
 
     for keyword in KEYWORDS:
@@ -175,8 +175,6 @@ def main():
             title = article['title']
             description = article['desc']
             url = article['link']
-            if not url.startswith("http"):
-                url = "https://news.google.com" + url  # Ensure the URL is correct
             news_text += f"{title} {description} "
             st.markdown(f"#### [{title}]({url})")
             st.markdown(f"*{description}*")
