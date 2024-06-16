@@ -24,7 +24,7 @@ nltk.download("stopwords", download_dir=nltk_data_dir, quiet=True)
 from nltk.corpus import stopwords
 
 # Initialize GoogleNews
-googlenews = GoogleNews(lang='en', region='US')
+googlenews = GoogleNews()
 
 # Keywords for analysis
 KEYWORDS = ['Troy University', 'University of South Alabama', 'Jacksonville State University',
@@ -123,9 +123,6 @@ def load_historical_data(bucket, object_key):
         historical_data = pd.read_csv(response['Body'])
         historical_data['Date'] = pd.to_datetime(historical_data['Date'], errors='coerce').dt.date
         return historical_data
-    except s3.exceptions.NoSuchKey:
-        st.write(f"The file {object_key} does not exist in the S3 bucket {bucket}. A new file will be created.")
-        return pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
     except Exception as e:
         st.write(f"Could not load historical data from S3. Error: {e}")
         return pd.DataFrame(columns=["Date", "Keyword", "Topics", "Sentiment"])
