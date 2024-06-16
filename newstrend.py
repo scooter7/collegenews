@@ -211,6 +211,11 @@ def main():
             keyword_data = keyword_data.dropna(subset=['Date'])
             keyword_data = keyword_data.sort_values('Date')
 
+            # Ensure each day has a sentiment score
+            date_range = pd.date_range(start=keyword_data['Date'].min(), end=keyword_data['Date'].max())
+            keyword_data = keyword_data.set_index('Date').reindex(date_range).fillna(method='ffill').reset_index()
+            keyword_data.columns = ['Date', 'Keyword', 'Topics', 'Sentiment']
+
             # Display sentiment trend chart
             if not keyword_data.empty:
                 st.subheader(f"Sentiment Trend for \"{keyword}\":")
