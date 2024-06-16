@@ -103,7 +103,6 @@ def fetch_news(keyword):
         googlenews.clear()
         googlenews.search(keyword)
         result = googlenews.result()
-        st.write(f"Results for {keyword}: {result}")  # Debug statement to display results
         if not result:
             st.error(f"No results found for {keyword}.")
             return []
@@ -179,6 +178,8 @@ def main():
             title = article['title']
             description = article['desc']
             url = article['link']
+            if not url.startswith("http"):
+                url = "https://news.google.com" + url  # Ensure the URL is correct
             news_text += f"{title} {description} "
             st.markdown(f"#### [{title}]({url})")
             st.markdown(f"*{description}*")
