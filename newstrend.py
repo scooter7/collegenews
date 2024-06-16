@@ -48,7 +48,7 @@ def plot_wordcloud(words):
 
 def render_sentiment_gauge(score):
     color = '#6DD400' if score > 0 else '#FFD93D' if score == 0 else '#FF4500'
-    option = {
+    options = {
         "series": [
             {
                 "type": 'gauge',
@@ -83,7 +83,7 @@ def render_sentiment_gauge(score):
             }
         ]
     }
-    st_echarts(option=option, height="400px")
+    st_echarts(options=options, height="400px")
 
 def analyze_sentiment(text):
     from nltk.sentiment.vader import SentimentIntensityAnalyzer
